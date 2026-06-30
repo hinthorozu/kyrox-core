@@ -2,6 +2,7 @@
 """Run quality checks for KYROX Core backend."""
 
 import compileall
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -39,6 +40,24 @@ def check_import() -> bool:
         return False
 
 
+def check_alembic() -> bool:
+    print("==> Alembic config check")
+    env = os.environ.copy()
+    env["PYTHONPATH"] = str(BACKEND)
+    result = subprocess.run(
+        [sys.executable, "-m", "alembic", "-c", str(ROOT / "alembic.ini"), "history"],
+        cwd=str(ROOT),
+        env=env,
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode == 0:
+        print("    PASS")
+        return True
+    print(f"    FAIL: {result.stderr or result.stdout}")
+    return False
+
+
 def check_pytest() -> bool:
     print("==> pytest")
     result = subprocess.run(
@@ -56,6 +75,7 @@ def main() -> int:
     results = [
         check_compile(),
         check_import(),
+        check_alembic(),
         check_pytest(),
     ]
 
