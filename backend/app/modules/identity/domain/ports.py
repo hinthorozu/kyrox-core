@@ -1,7 +1,43 @@
+from dataclasses import dataclass
+from datetime import datetime
 from typing import Protocol
 from uuid import UUID
 
-from app.modules.identity.domain.entities import Membership, Organization, User
+from app.modules.identity.domain.entities import (
+    Membership,
+    Organization,
+    RefreshToken,
+    Session,
+    User,
+)
+
+
+@dataclass(frozen=True)
+class AccessTokenClaims:
+    sub: UUID
+    email: str
+    sid: UUID
+    exp: datetime
+    iat: datetime
+    jti: UUID
+
+
+class PasswordHasher(Protocol):
+    def hash(self, password: str) -> str: ...
+
+    def verify(self, password: str, password_hash: str) -> bool: ...
+
+
+class TokenService(Protocol):
+    def create_access_token(self, claims: AccessTokenClaims) -> str: ...
+
+    def decode_access_token(self, token: str) -> AccessTokenClaims: ...
+
+
+class RefreshTokenService(Protocol):
+    def generate(self) -> str: ...
+
+    def hash_token(self, token: str) -> str: ...
 
 
 class UserRepository(Protocol):
@@ -46,3 +82,21 @@ class MembershipRepository(Protocol):
     def update(self, membership: Membership) -> Membership: ...
 
     def soft_delete(self, membership_id: UUID) -> None: ...
+
+
+class SessionRepository(Protocol):
+    def create(self, session: Session) -> Session: ...
+
+    def get_by_id(self, session_id: UUID) -> Session | None: ...
+
+    def update(self, session: Session) -> Session: ...
+
+    def revoke(self, session_id: UUID, revoked_at: datetime) -> None: ...
+
+
+class RefreshTokenRepository(Protocol):
+    def create(self, refresh_token: RefreshToken) -> RefreshToken: ...
+
+    def get_by_token_hash(self, token_hash: str) -> RefreshToken | None: ...
+
+    def revoke(self, refresh_token_id: UUID, revoked_at: datetime) -> None: ...

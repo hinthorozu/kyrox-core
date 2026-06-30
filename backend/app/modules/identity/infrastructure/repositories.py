@@ -1,27 +1,40 @@
+from datetime import datetime
 from uuid import UUID
 
 from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session as DbSession
 
 from app.db.utils import utc_now
-from app.modules.identity.domain.entities import Membership, Organization, User
+from app.modules.identity.domain.entities import (
+    Membership,
+    Organization,
+    RefreshToken,
+    Session,
+    User,
+)
 from app.modules.identity.infrastructure.persistence.mappers import (
     membership_to_domain,
     membership_to_model,
     organization_to_domain,
     organization_to_model,
+    refresh_token_to_domain,
+    refresh_token_to_model,
+    session_to_domain,
+    session_to_model,
     user_to_domain,
     user_to_model,
 )
 from app.modules.identity.infrastructure.persistence.models import (
     MembershipModel,
     OrganizationModel,
+    RefreshTokenModel,
+    SessionModel,
     UserModel,
 )
 
 
 class SqlAlchemyUserRepository:
-    def __init__(self, session: Session) -> None:
+    def __init__(self, session: DbSession) -> None:
         self._session = session
 
     def get_by_id(self, user_id: UUID) -> User | None:
@@ -73,7 +86,7 @@ class SqlAlchemyUserRepository:
 
 
 class SqlAlchemyOrganizationRepository:
-    def __init__(self, session: Session) -> None:
+    def __init__(self, session: DbSession) -> None:
         self._session = session
 
     def get_by_id(self, organization_id: UUID) -> Organization | None:
@@ -124,7 +137,7 @@ class SqlAlchemyOrganizationRepository:
 
 
 class SqlAlchemyMembershipRepository:
-    def __init__(self, session: Session) -> None:
+    def __init__(self, session: DbSession) -> None:
         self._session = session
 
     def get_by_id(self, membership_id: UUID) -> Membership | None:
@@ -192,4 +205,72 @@ class SqlAlchemyMembershipRepository:
             raise ValueError(f"Membership not found: {membership_id}")
 
         model.deleted_at = utc_now()
+        self._session.flush()
+
+
+class SqlAlchemySessionRepository:
+    def __init__(self, session: DbSession) -> None:
+        self._session = session
+
+    def create(self, session_entity: Session) -> Session:
+        model = session_to_model(session_entity)
+        self._session.add(model)
+        self._session.flush()
+        self._session.refresh(model)
+        return session_to_domain(model)
+
+    def get_by_id(self, session_id: UUID) -> Session | None:
+        model = self._session.get(SessionModel, session_id)
+        if model is None:
+            return None
+        return session_to_domain(model)
+
+    def update(self, session_entity: Session) -> Session:
+        model = self._session.get(SessionModel, session_entity.id)
+        if model is None:
+            raise ValueError(f"Session not found: {session_entity.id}")
+
+        model.updated_at = session_entity.updated_at
+        model.revoked_at = session_entity.revoked_at
+        model.last_used_at = session_entity.last_used_at
+        model.user_agent = session_entity.user_agent
+        model.ip_address = session_entity.ip_address
+
+        self._session.flush()
+        self._session.refresh(model)
+        return session_to_domain(model)
+
+    def revoke(self, session_id: UUID, revoked_at: datetime) -> None:
+        model = self._session.get(SessionModel, session_id)
+        if model is None:
+            raise ValueError(f"Session not found: {session_id}")
+
+        model.revoked_at = revoked_at
+        self._session.flush()
+
+
+class SqlAlchemyRefreshTokenRepository:
+    def __init__(self, session: DbSession) -> None:
+        self._session = session
+
+    def create(self, refresh_token: RefreshToken) -> RefreshToken:
+        model = refresh_token_to_model(refresh_token)
+        self._session.add(model)
+        self._session.flush()
+        self._session.refresh(model)
+        return refresh_token_to_domain(model)
+
+    def get_by_token_hash(self, token_hash: str) -> RefreshToken | None:
+        stmt = select(RefreshTokenModel).where(RefreshTokenModel.token_hash == token_hash)
+        model = self._session.scalars(stmt).first()
+        if model is None:
+            return None
+        return refresh_token_to_domain(model)
+
+    def revoke(self, refresh_token_id: UUID, revoked_at: datetime) -> None:
+        model = self._session.get(RefreshTokenModel, refresh_token_id)
+        if model is None:
+            raise ValueError(f"Refresh token not found: {refresh_token_id}")
+
+        model.revoked_at = revoked_at
         self._session.flush()

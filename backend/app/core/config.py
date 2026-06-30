@@ -1,4 +1,4 @@
-from pydantic_settings import BaseSettings, SettingsConfigDict
+﻿from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
@@ -7,6 +7,11 @@ class Settings(BaseSettings):
     ENVIRONMENT: str = "development"
     DEBUG: bool = False
     DATABASE_URL: str = "postgresql://postgres:postgres@localhost:5432/kyrox_core"
+
+    JWT_SECRET_KEY: str = "dev-insecure-change-me-use-env-in-production-32b"
+    JWT_ALGORITHM: str = "HS256"
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 15
+    REFRESH_TOKEN_EXPIRE_DAYS: int = 30
 
     model_config = SettingsConfigDict(
         env_file=".env",

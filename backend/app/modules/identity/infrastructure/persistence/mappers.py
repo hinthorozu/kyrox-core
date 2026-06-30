@@ -1,4 +1,4 @@
-from app.modules.identity.domain.entities import Membership, Organization, User
+from app.modules.identity.domain.entities import Membership, Organization, RefreshToken, Session, User
 from app.modules.identity.domain.enums import (
     MembershipStatus,
     OrganizationStatus,
@@ -7,6 +7,8 @@ from app.modules.identity.domain.enums import (
 from app.modules.identity.infrastructure.persistence.models import (
     MembershipModel,
     OrganizationModel,
+    RefreshTokenModel,
+    SessionModel,
     UserModel,
 )
 
@@ -82,4 +84,52 @@ def membership_to_model(entity: Membership) -> MembershipModel:
         created_at=entity.created_at,
         updated_at=entity.updated_at,
         deleted_at=entity.deleted_at,
+    )
+
+
+def session_to_domain(model: SessionModel) -> Session:
+    return Session(
+        id=model.id,
+        user_id=model.user_id,
+        created_at=model.created_at,
+        updated_at=model.updated_at,
+        revoked_at=model.revoked_at,
+        last_used_at=model.last_used_at,
+        user_agent=model.user_agent,
+        ip_address=model.ip_address,
+    )
+
+
+def session_to_model(entity: Session) -> SessionModel:
+    return SessionModel(
+        id=entity.id,
+        user_id=entity.user_id,
+        created_at=entity.created_at,
+        updated_at=entity.updated_at,
+        revoked_at=entity.revoked_at,
+        last_used_at=entity.last_used_at,
+        user_agent=entity.user_agent,
+        ip_address=entity.ip_address,
+    )
+
+
+def refresh_token_to_domain(model: RefreshTokenModel) -> RefreshToken:
+    return RefreshToken(
+        id=model.id,
+        session_id=model.session_id,
+        token_hash=model.token_hash,
+        expires_at=model.expires_at,
+        created_at=model.created_at,
+        revoked_at=model.revoked_at,
+    )
+
+
+def refresh_token_to_model(entity: RefreshToken) -> RefreshTokenModel:
+    return RefreshTokenModel(
+        id=entity.id,
+        session_id=entity.session_id,
+        token_hash=entity.token_hash,
+        expires_at=entity.expires_at,
+        created_at=entity.created_at,
+        revoked_at=entity.revoked_at,
     )
