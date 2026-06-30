@@ -15,7 +15,7 @@ from app.modules.identity.domain.entities import (
     Session,
     User,
 )
-from app.modules.identity.domain.enums import MembershipStatus
+from app.modules.identity.domain.enums import MembershipStatus, OrganizationStatus
 from app.modules.identity.infrastructure.persistence.mappers import (
     membership_to_domain,
     membership_to_model,
@@ -432,6 +432,10 @@ class SqlAlchemyPermissionChecker:
                 MembershipModel,
                 MembershipModel.role_id == RoleModel.id,
             )
+            .join(
+                OrganizationModel,
+                OrganizationModel.id == MembershipModel.organization_id,
+            )
             .where(
                 MembershipModel.user_id == user_id,
                 MembershipModel.organization_id == organization_id,
@@ -440,6 +444,8 @@ class SqlAlchemyPermissionChecker:
                 MembershipModel.role_id.is_not(None),
                 RoleModel.deleted_at.is_(None),
                 RoleModel.organization_id == organization_id,
+                OrganizationModel.status == OrganizationStatus.ACTIVE.value,
+                OrganizationModel.deleted_at.is_(None),
                 PermissionModel.code == permission_code,
             )
         )

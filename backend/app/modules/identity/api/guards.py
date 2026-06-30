@@ -8,18 +8,12 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from app.core.exceptions import AppException
 from app.modules.identity.api.context import AuthorizationContext
-from app.modules.identity.api.dependencies import get_authorization_service
+from app.modules.identity.api.dependencies import get_authorization_service, get_token_service
 from app.modules.identity.application.authorization import AuthorizationService
 from app.modules.identity.domain.exceptions import PermissionDeniedError
 from app.modules.identity.domain.ports import AccessTokenClaims, TokenService
 
 _bearer_scheme = HTTPBearer(auto_error=False)
-
-
-def get_token_service() -> TokenService:
-    from app.modules.identity.infrastructure.security.jwt_token_service import JwtTokenService
-
-    return JwtTokenService()
 
 
 def get_access_token_claims(

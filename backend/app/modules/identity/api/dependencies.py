@@ -21,6 +21,11 @@ from app.modules.identity.infrastructure.security.jwt_token_service import JwtTo
 from app.modules.identity.infrastructure.security.refresh_token_service import (
     SecureRefreshTokenService,
 )
+from app.modules.identity.domain.ports import TokenService
+
+
+def get_token_service() -> TokenService:
+    return JwtTokenService()
 
 
 def get_login_use_case(db: DbSession = Depends(get_db)) -> LoginUseCase:

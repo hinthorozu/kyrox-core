@@ -55,6 +55,7 @@ def test_identity_membership_table_metadata() -> None:
     fk_columns = {fk.parent.name: fk.target_fullname for fk in table.foreign_keys}
     assert fk_columns["user_id"] == "identity_users.id"
     assert fk_columns["organization_id"] == "identity_organizations.id"
+    assert fk_columns["role_id"] == "identity_roles.id"
 
     unique_constraints = {
         tuple(column.name for column in constraint.columns)

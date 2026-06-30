@@ -14,7 +14,7 @@ from app.db.base import Base
 from app.db.session import get_db
 from app.modules.identity.api.context import AuthorizationContext
 from app.modules.identity.api.dependencies import get_authorization_service
-from app.modules.identity.api.guards import get_authorization_context, require_permission
+from app.modules.identity.api.guards import require_permission
 from app.modules.identity.application.authorization import AuthorizationService
 from app.modules.identity.domain.entities import (
     Membership,
@@ -40,6 +40,7 @@ from app.modules.identity.infrastructure.repositories import (
     SqlAlchemyRoleRepository,
     SqlAlchemyUserRepository,
 )
+from app.modules.identity.infrastructure.security.jwt_token_service import JwtTokenService
 
 
 @pytest.fixture
@@ -62,7 +63,7 @@ def _now() -> datetime:
     return datetime(2026, 7, 1, 12, 0, 0, tzinfo=UTC)
 
 
-def _seed(db_session: Session) -> tuple[User, Organization, AccessTokenClaims]:
+def _seed(db_session: Session) -> tuple[User, Organization, str]:
     user_repo = SqlAlchemyUserRepository(db_session)
     org_repo = SqlAlchemyOrganizationRepository(db_session)
     membership_repo = SqlAlchemyMembershipRepository(db_session)
@@ -127,16 +128,19 @@ def _seed(db_session: Session) -> tuple[User, Organization, AccessTokenClaims]:
     )
     db_session.commit()
 
-    now = _now()
-    claims = AccessTokenClaims(
-        sub=user.id,
-        email=user.email,
-        sid=uuid.uuid4(),
-        exp=now + timedelta(minutes=15),
-        iat=now,
-        jti=uuid.uuid4(),
+    token_service = JwtTokenService()
+    now = datetime.now(UTC)
+    access_token = token_service.create_access_token(
+        AccessTokenClaims(
+            sub=user.id,
+            email=user.email,
+            sid=uuid.uuid4(),
+            exp=now + timedelta(minutes=15),
+            iat=now,
+            jti=uuid.uuid4(),
+        )
     )
-    return user, org, claims
+    return user, org, access_token
 
 
 @pytest.fixture
@@ -185,42 +189,76 @@ def guard_client(db_session: Session) -> Generator[TestClient, None, None]:
     app.dependency_overrides.clear()
 
 
-def test_require_permission_guard_allows_authorized_request(
+def test_guard_rejects_missing_bearer_token(guard_client: TestClient, db_session: Session) -> None:
+    _user, org, _token = _seed(db_session)
+
+    response = guard_client.get(
+        "/protected",
+        headers={"X-Organization-Id": str(org.id)},
+    )
+
+    assert response.status_code == 401
+
+
+def test_guard_rejects_invalid_bearer_token(guard_client: TestClient, db_session: Session) -> None:
+    _user, org, _token = _seed(db_session)
+
+    response = guard_client.get(
+        "/protected",
+        headers={
+            "Authorization": "Bearer invalid-token",
+            "X-Organization-Id": str(org.id),
+        },
+    )
+
+    assert response.status_code == 401
+
+
+def test_guard_rejects_missing_organization_header(
     guard_client: TestClient,
     db_session: Session,
 ) -> None:
-    user, org, claims = _seed(db_session)
+    _user, _org, token = _seed(db_session)
 
-    def override_context() -> AuthorizationContext:
-        return AuthorizationContext(
-            user_id=claims.sub,
-            organization_id=org.id,
-            email=claims.email,
-        )
+    response = guard_client.get(
+        "/protected",
+        headers={"Authorization": f"Bearer {token}"},
+    )
 
-    guard_client.app.dependency_overrides[get_authorization_context] = override_context
+    assert response.status_code == 422
 
-    response = guard_client.get("/protected")
+
+def test_guard_rejects_missing_permission(
+    guard_client: TestClient,
+    db_session: Session,
+) -> None:
+    _user, org, token = _seed(db_session)
+
+    response = guard_client.get(
+        "/denied",
+        headers={
+            "Authorization": f"Bearer {token}",
+            "X-Organization-Id": str(org.id),
+        },
+    )
+
+    assert response.status_code == 403
+
+
+def test_guard_allows_authorized_request(
+    guard_client: TestClient,
+    db_session: Session,
+) -> None:
+    user, org, token = _seed(db_session)
+
+    response = guard_client.get(
+        "/protected",
+        headers={
+            "Authorization": f"Bearer {token}",
+            "X-Organization-Id": str(org.id),
+        },
+    )
 
     assert response.status_code == 200
     assert response.json()["user_id"] == str(user.id)
-
-
-def test_require_permission_guard_rejects_missing_permission(
-    guard_client: TestClient,
-    db_session: Session,
-) -> None:
-    user, org, claims = _seed(db_session)
-
-    def override_context() -> AuthorizationContext:
-        return AuthorizationContext(
-            user_id=claims.sub,
-            organization_id=org.id,
-            email=claims.email,
-        )
-
-    guard_client.app.dependency_overrides[get_authorization_context] = override_context
-
-    response = guard_client.get("/denied")
-
-    assert response.status_code == 403
+    assert response.json()["organization_id"] == str(org.id)
