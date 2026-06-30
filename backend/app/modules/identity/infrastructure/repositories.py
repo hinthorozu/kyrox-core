@@ -8,17 +8,26 @@ from app.db.utils import utc_now
 from app.modules.identity.domain.entities import (
     Membership,
     Organization,
+    Permission,
     RefreshToken,
+    Role,
+    RolePermission,
     Session,
     User,
 )
+from app.modules.identity.domain.enums import MembershipStatus
 from app.modules.identity.infrastructure.persistence.mappers import (
     membership_to_domain,
     membership_to_model,
     organization_to_domain,
     organization_to_model,
+    permission_to_domain,
+    permission_to_model,
     refresh_token_to_domain,
     refresh_token_to_model,
+    role_permission_to_model,
+    role_to_domain,
+    role_to_model,
     session_to_domain,
     session_to_model,
     user_to_domain,
@@ -27,7 +36,10 @@ from app.modules.identity.infrastructure.persistence.mappers import (
 from app.modules.identity.infrastructure.persistence.models import (
     MembershipModel,
     OrganizationModel,
+    PermissionModel,
     RefreshTokenModel,
+    RoleModel,
+    RolePermissionModel,
     SessionModel,
     UserModel,
 )
@@ -192,6 +204,7 @@ class SqlAlchemyMembershipRepository:
         model.user_id = membership.user_id
         model.organization_id = membership.organization_id
         model.status = membership.status.value
+        model.role_id = membership.role_id
         model.updated_at = membership.updated_at
         model.deleted_at = membership.deleted_at
 
@@ -274,3 +287,160 @@ class SqlAlchemyRefreshTokenRepository:
 
         model.revoked_at = revoked_at
         self._session.flush()
+
+
+class SqlAlchemyRoleRepository:
+    def __init__(self, session: DbSession) -> None:
+        self._session = session
+
+    def get_by_id(self, role_id: UUID) -> Role | None:
+        model = self._session.get(RoleModel, role_id)
+        if model is None or model.deleted_at is not None:
+            return None
+        return role_to_domain(model)
+
+    def get_by_organization_and_slug(self, organization_id: UUID, slug: str) -> Role | None:
+        stmt = select(RoleModel).where(
+            RoleModel.organization_id == organization_id,
+            RoleModel.slug == slug,
+            RoleModel.deleted_at.is_(None),
+        )
+        model = self._session.scalars(stmt).first()
+        if model is None:
+            return None
+        return role_to_domain(model)
+
+    def list_by_organization_id(self, organization_id: UUID) -> list[Role]:
+        stmt = select(RoleModel).where(
+            RoleModel.organization_id == organization_id,
+            RoleModel.deleted_at.is_(None),
+        )
+        models = self._session.scalars(stmt).all()
+        return [role_to_domain(model) for model in models]
+
+    def create(self, role: Role) -> Role:
+        model = role_to_model(role)
+        self._session.add(model)
+        self._session.flush()
+        self._session.refresh(model)
+        return role_to_domain(model)
+
+    def update(self, role: Role) -> Role:
+        model = self._session.get(RoleModel, role.id)
+        if model is None:
+            raise ValueError(f"Role not found: {role.id}")
+
+        model.organization_id = role.organization_id
+        model.name = role.name
+        model.slug = role.slug
+        model.is_system = role.is_system
+        model.updated_at = role.updated_at
+        model.deleted_at = role.deleted_at
+
+        self._session.flush()
+        self._session.refresh(model)
+        return role_to_domain(model)
+
+    def soft_delete(self, role_id: UUID) -> None:
+        model = self._session.get(RoleModel, role_id)
+        if model is None:
+            raise ValueError(f"Role not found: {role_id}")
+
+        model.deleted_at = utc_now()
+        self._session.flush()
+
+
+class SqlAlchemyPermissionRepository:
+    def __init__(self, session: DbSession) -> None:
+        self._session = session
+
+    def get_by_id(self, permission_id: UUID) -> Permission | None:
+        model = self._session.get(PermissionModel, permission_id)
+        if model is None:
+            return None
+        return permission_to_domain(model)
+
+    def get_by_code(self, code: str) -> Permission | None:
+        stmt = select(PermissionModel).where(PermissionModel.code == code)
+        model = self._session.scalars(stmt).first()
+        if model is None:
+            return None
+        return permission_to_domain(model)
+
+    def list_all(self) -> list[Permission]:
+        models = self._session.scalars(select(PermissionModel)).all()
+        return [permission_to_domain(model) for model in models]
+
+    def create(self, permission: Permission) -> Permission:
+        model = permission_to_model(permission)
+        self._session.add(model)
+        self._session.flush()
+        self._session.refresh(model)
+        return permission_to_domain(model)
+
+
+class SqlAlchemyRolePermissionRepository:
+    def __init__(self, session: DbSession) -> None:
+        self._session = session
+
+    def grant(self, role_permission: RolePermission) -> None:
+        model = role_permission_to_model(role_permission)
+        self._session.merge(model)
+        self._session.flush()
+
+    def revoke(self, role_id: UUID, permission_id: UUID) -> None:
+        model = self._session.get(
+            RolePermissionModel,
+            {"role_id": role_id, "permission_id": permission_id},
+        )
+        if model is not None:
+            self._session.delete(model)
+            self._session.flush()
+
+    def list_permission_ids_for_role(self, role_id: UUID) -> list[UUID]:
+        stmt = select(RolePermissionModel.permission_id).where(
+            RolePermissionModel.role_id == role_id
+        )
+        return list(self._session.scalars(stmt).all())
+
+    def has_permission(self, role_id: UUID, permission_id: UUID) -> bool:
+        model = self._session.get(
+            RolePermissionModel,
+            {"role_id": role_id, "permission_id": permission_id},
+        )
+        return model is not None
+
+
+class SqlAlchemyPermissionChecker:
+    def __init__(self, session: DbSession) -> None:
+        self._session = session
+
+    def has_permission(
+        self,
+        user_id: UUID,
+        organization_id: UUID,
+        permission_code: str,
+    ) -> bool:
+        stmt = (
+            select(PermissionModel.id)
+            .join(
+                RolePermissionModel,
+                RolePermissionModel.permission_id == PermissionModel.id,
+            )
+            .join(RoleModel, RoleModel.id == RolePermissionModel.role_id)
+            .join(
+                MembershipModel,
+                MembershipModel.role_id == RoleModel.id,
+            )
+            .where(
+                MembershipModel.user_id == user_id,
+                MembershipModel.organization_id == organization_id,
+                MembershipModel.status == MembershipStatus.ACTIVE.value,
+                MembershipModel.deleted_at.is_(None),
+                MembershipModel.role_id.is_not(None),
+                RoleModel.deleted_at.is_(None),
+                RoleModel.organization_id == organization_id,
+                PermissionModel.code == permission_code,
+            )
+        )
+        return self._session.scalars(stmt).first() is not None

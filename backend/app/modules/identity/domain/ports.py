@@ -6,7 +6,10 @@ from uuid import UUID
 from app.modules.identity.domain.entities import (
     Membership,
     Organization,
+    Permission,
     RefreshToken,
+    Role,
+    RolePermission,
     Session,
     User,
 )
@@ -82,6 +85,53 @@ class MembershipRepository(Protocol):
     def update(self, membership: Membership) -> Membership: ...
 
     def soft_delete(self, membership_id: UUID) -> None: ...
+
+
+class RoleRepository(Protocol):
+    def get_by_id(self, role_id: UUID) -> Role | None: ...
+
+    def get_by_organization_and_slug(
+        self,
+        organization_id: UUID,
+        slug: str,
+    ) -> Role | None: ...
+
+    def list_by_organization_id(self, organization_id: UUID) -> list[Role]: ...
+
+    def create(self, role: Role) -> Role: ...
+
+    def update(self, role: Role) -> Role: ...
+
+    def soft_delete(self, role_id: UUID) -> None: ...
+
+
+class PermissionRepository(Protocol):
+    def get_by_id(self, permission_id: UUID) -> Permission | None: ...
+
+    def get_by_code(self, code: str) -> Permission | None: ...
+
+    def list_all(self) -> list[Permission]: ...
+
+    def create(self, permission: Permission) -> Permission: ...
+
+
+class RolePermissionRepository(Protocol):
+    def grant(self, role_permission: RolePermission) -> None: ...
+
+    def revoke(self, role_id: UUID, permission_id: UUID) -> None: ...
+
+    def list_permission_ids_for_role(self, role_id: UUID) -> list[UUID]: ...
+
+    def has_permission(self, role_id: UUID, permission_id: UUID) -> bool: ...
+
+
+class PermissionChecker(Protocol):
+    def has_permission(
+        self,
+        user_id: UUID,
+        organization_id: UUID,
+        permission_code: str,
+    ) -> bool: ...
 
 
 class SessionRepository(Protocol):

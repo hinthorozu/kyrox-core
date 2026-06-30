@@ -1,4 +1,13 @@
-from app.modules.identity.domain.entities import Membership, Organization, RefreshToken, Session, User
+from app.modules.identity.domain.entities import (
+    Membership,
+    Organization,
+    Permission,
+    RefreshToken,
+    Role,
+    RolePermission,
+    Session,
+    User,
+)
 from app.modules.identity.domain.enums import (
     MembershipStatus,
     OrganizationStatus,
@@ -7,7 +16,10 @@ from app.modules.identity.domain.enums import (
 from app.modules.identity.infrastructure.persistence.models import (
     MembershipModel,
     OrganizationModel,
+    PermissionModel,
     RefreshTokenModel,
+    RoleModel,
+    RolePermissionModel,
     SessionModel,
     UserModel,
 )
@@ -71,6 +83,7 @@ def membership_to_domain(model: MembershipModel) -> Membership:
         status=MembershipStatus(model.status),
         created_at=model.created_at,
         updated_at=model.updated_at,
+        role_id=model.role_id,
         deleted_at=model.deleted_at,
     )
 
@@ -83,7 +96,72 @@ def membership_to_model(entity: Membership) -> MembershipModel:
         status=entity.status.value,
         created_at=entity.created_at,
         updated_at=entity.updated_at,
+        role_id=entity.role_id,
         deleted_at=entity.deleted_at,
+    )
+
+
+def role_to_domain(model: RoleModel) -> Role:
+    return Role(
+        id=model.id,
+        organization_id=model.organization_id,
+        name=model.name,
+        slug=model.slug,
+        is_system=model.is_system,
+        created_at=model.created_at,
+        updated_at=model.updated_at,
+        deleted_at=model.deleted_at,
+    )
+
+
+def role_to_model(entity: Role) -> RoleModel:
+    return RoleModel(
+        id=entity.id,
+        organization_id=entity.organization_id,
+        name=entity.name,
+        slug=entity.slug,
+        is_system=entity.is_system,
+        created_at=entity.created_at,
+        updated_at=entity.updated_at,
+        deleted_at=entity.deleted_at,
+    )
+
+
+def permission_to_domain(model: PermissionModel) -> Permission:
+    return Permission(
+        id=model.id,
+        code=model.code,
+        description=model.description,
+        module=model.module,
+        is_system=model.is_system,
+        created_at=model.created_at,
+        updated_at=model.updated_at,
+    )
+
+
+def permission_to_model(entity: Permission) -> PermissionModel:
+    return PermissionModel(
+        id=entity.id,
+        code=entity.code,
+        description=entity.description,
+        module=entity.module,
+        is_system=entity.is_system,
+        created_at=entity.created_at,
+        updated_at=entity.updated_at,
+    )
+
+
+def role_permission_to_domain(model: RolePermissionModel) -> RolePermission:
+    return RolePermission(
+        role_id=model.role_id,
+        permission_id=model.permission_id,
+    )
+
+
+def role_permission_to_model(entity: RolePermission) -> RolePermissionModel:
+    return RolePermissionModel(
+        role_id=entity.role_id,
+        permission_id=entity.permission_id,
     )
 
 

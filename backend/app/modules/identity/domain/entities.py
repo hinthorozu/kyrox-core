@@ -40,7 +40,37 @@ class Membership:
     status: MembershipStatus
     created_at: datetime
     updated_at: datetime
+    role_id: UUID | None = None
     deleted_at: datetime | None = None
+
+
+@dataclass
+class Role:
+    id: UUID
+    organization_id: UUID | None
+    name: str
+    slug: str
+    is_system: bool
+    created_at: datetime
+    updated_at: datetime
+    deleted_at: datetime | None = None
+
+
+@dataclass
+class Permission:
+    id: UUID
+    code: str
+    description: str
+    module: str
+    is_system: bool
+    created_at: datetime
+    updated_at: datetime
+
+
+@dataclass(frozen=True)
+class RolePermission:
+    role_id: UUID
+    permission_id: UUID
 
 
 @dataclass

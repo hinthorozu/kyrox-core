@@ -7,7 +7,9 @@ from app.modules.identity.application.auth import (
     LogoutUseCase,
     RefreshSessionUseCase,
 )
+from app.modules.identity.application.authorization import AuthorizationService
 from app.modules.identity.infrastructure.repositories import (
+    SqlAlchemyPermissionChecker,
     SqlAlchemyRefreshTokenRepository,
     SqlAlchemySessionRepository,
     SqlAlchemyUserRepository,
@@ -47,4 +49,11 @@ def get_logout_use_case(db: DbSession = Depends(get_db)) -> LogoutUseCase:
         session_repository=SqlAlchemySessionRepository(db),
         refresh_token_repository=SqlAlchemyRefreshTokenRepository(db),
         refresh_token_service=SecureRefreshTokenService(),
+    )
+
+
+def get_authorization_service(db: DbSession = Depends(get_db)) -> AuthorizationService:
+    return AuthorizationService(
+        permission_checker=SqlAlchemyPermissionChecker(db),
+        user_repository=SqlAlchemyUserRepository(db),
     )

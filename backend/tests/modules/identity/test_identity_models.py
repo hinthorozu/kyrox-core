@@ -46,6 +46,7 @@ def test_identity_membership_table_metadata() -> None:
         "user_id",
         "organization_id",
         "status",
+        "role_id",
         "created_at",
         "updated_at",
         "deleted_at",
