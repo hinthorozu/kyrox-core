@@ -11,6 +11,7 @@ if str(BACKEND_DIR) not in sys.path:
 
 from app.core.config import settings
 from app.db.base import Base
+from app.modules.identity.infrastructure.persistence import models as identity_models  # noqa: F401
 
 config = context.config
 
