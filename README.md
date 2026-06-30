@@ -21,20 +21,20 @@
 | Architecture documentation | In progress (Sprint 0.1) |
 | Backend foundation | Completed (Sprint 0.2) |
 | Backend architecture standards | Completed (Sprint 0.2.5) |
+| Identity platform design | In progress (Sprint 0.3) |
 | Database migrations | Not started |
 | Public API endpoints | Health check only (`GET /api/v1/health`) |
 
-Sprint 0.2 delivered the reusable backend foundation. Sprint 0.2.5 defined layered architecture standards before Identity Platform implementation.
+Sprint 0.2 delivered the reusable backend foundation. Sprint 0.2.5 defined layered architecture standards. Sprint 0.3 defines the Identity Platform design before implementation.
 
 ## Current Sprint
 
-**Sprint 0.2.5 — Backend Architecture Standards** (completed)
+**Sprint 0.3 — Identity Platform Design** (active)
 
-Delivered:
+In progress:
 
-- [Backend Architecture Standards](docs/BACKEND_ARCHITECTURE_STANDARDS.md) — layers, dependency rules, patterns, testing
-- [ADR 0002: Backend Layered Architecture](docs/DECISIONS/0002-backend-layered-architecture.md)
-- Module layout convention for `modules/<name>/{domain,application,infrastructure,api}`
+- [Identity Platform Design](docs/IDENTITY_PLATFORM_DESIGN.md) — users, organizations, membership, RBAC, auth, sessions
+- [ADR 0003: Organization as Tenant Concept](docs/DECISIONS/0003-organization-as-tenant-concept.md) — **Organization** is the platform account boundary; implementation follows design review
 
 Run quality checks:
 
@@ -42,7 +42,7 @@ Run quality checks:
 python scripts/quality_check.py
 ```
 
-Next up: **Sprint 0.3 — Identity Platform** (auth, users, tenants, RBAC)
+Implementation (models, migrations, identity APIs) begins in **Sprint 0.3.x** after design approval. Next platform sprint after identity: **Sprint 0.4 — Audit, settings, files, jobs**
 
 ## Roadmap (Summary)
 
@@ -51,7 +51,8 @@ Next up: **Sprint 0.3 — Identity Platform** (auth, users, tenants, RBAC)
 | **0.1** | Architecture — documentation and boundaries |
 | **0.2** | Backend foundation — project structure, tooling, health checks |
 | **0.2.5** | Backend architecture standards — layer boundaries, dependency rules, testing |
-| **0.3** | Identity Platform — auth, users, tenants, RBAC |
+| **0.3** | Identity Platform design — organization, user, membership, RBAC, auth |
+| **0.3.x** | Identity Platform implementation — phased after design review |
 | **0.4** | Audit, settings, files, background jobs |
 | **1.0** | FAIR CRM integration preparation |
 
@@ -63,6 +64,7 @@ Start here:
 
 - **[KYROX Core Architecture](docs/KYROX_CORE_ARCHITECTURE.md)** — purpose, principles, boundaries, and integration rules
 - **[Backend Architecture Standards](docs/BACKEND_ARCHITECTURE_STANDARDS.md)** — layered architecture, modules, dependency rules, testing
+- **[Identity Platform Design](docs/IDENTITY_PLATFORM_DESIGN.md)** — users, organizations, membership, RBAC, authentication
 - **[Roadmap](docs/ROADMAP.md)** — sprint plan through FAIR CRM integration
 - **[Decisions](docs/DECISIONS/)** — architecture decision records (ADRs)
 
