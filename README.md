@@ -20,23 +20,21 @@
 |------|--------|
 | Architecture documentation | In progress (Sprint 0.1) |
 | Backend foundation | Completed (Sprint 0.2) |
+| Backend architecture standards | Completed (Sprint 0.2.5) |
 | Database migrations | Not started |
 | Public API endpoints | Health check only (`GET /api/v1/health`) |
 
-Sprint 0.2 delivered the reusable backend foundation: FastAPI app structure, configuration, logging, exception handling, database session placeholder, tests, and quality tooling.
+Sprint 0.2 delivered the reusable backend foundation. Sprint 0.2.5 defined layered architecture standards before Identity Platform implementation.
 
 ## Current Sprint
 
-**Sprint 0.2 — Backend Foundation** (completed)
+**Sprint 0.2.5 — Backend Architecture Standards** (completed)
 
 Delivered:
 
-- FastAPI app factory and API v1 router
-- Pydantic Settings configuration (PostgreSQL-ready)
-- Logging and global exception handling
-- SQLAlchemy session placeholder (no models or migrations yet)
-- Health endpoint: `GET /api/v1/health`
-- Pytest structure and quality checks
+- [Backend Architecture Standards](docs/BACKEND_ARCHITECTURE_STANDARDS.md) — layers, dependency rules, patterns, testing
+- [ADR 0002: Backend Layered Architecture](docs/DECISIONS/0002-backend-layered-architecture.md)
+- Module layout convention for `modules/<name>/{domain,application,infrastructure,api}`
 
 Run quality checks:
 
@@ -44,7 +42,7 @@ Run quality checks:
 python scripts/quality_check.py
 ```
 
-Next up: **Sprint 0.3 — Auth, users, tenants, RBAC**
+Next up: **Sprint 0.3 — Identity Platform** (auth, users, tenants, RBAC)
 
 ## Roadmap (Summary)
 
@@ -52,7 +50,8 @@ Next up: **Sprint 0.3 — Auth, users, tenants, RBAC**
 |--------|--------|
 | **0.1** | Architecture — documentation and boundaries |
 | **0.2** | Backend foundation — project structure, tooling, health checks |
-| **0.3** | Auth, users, tenants, RBAC |
+| **0.2.5** | Backend architecture standards — layer boundaries, dependency rules, testing |
+| **0.3** | Identity Platform — auth, users, tenants, RBAC |
 | **0.4** | Audit, settings, files, background jobs |
 | **1.0** | FAIR CRM integration preparation |
 
@@ -63,6 +62,7 @@ See [docs/ROADMAP.md](docs/ROADMAP.md) for sprint details.
 Start here:
 
 - **[KYROX Core Architecture](docs/KYROX_CORE_ARCHITECTURE.md)** — purpose, principles, boundaries, and integration rules
+- **[Backend Architecture Standards](docs/BACKEND_ARCHITECTURE_STANDARDS.md)** — layered architecture, modules, dependency rules, testing
 - **[Roadmap](docs/ROADMAP.md)** — sprint plan through FAIR CRM integration
 - **[Decisions](docs/DECISIONS/)** — architecture decision records (ADRs)
 
