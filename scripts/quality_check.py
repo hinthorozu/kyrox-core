@@ -2,18 +2,20 @@
 """Run quality checks for KYROX Core backend."""
 
 import compileall
-import os
 import subprocess
 import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 BACKEND = ROOT / "backend"
+SCRIPTS = ROOT / "scripts"
 
 
 def check_compile() -> bool:
     print("==> Python compile check")
-    success = compileall.compile_dir(str(BACKEND), quiet=1)
+    backend_ok = compileall.compile_dir(str(BACKEND), quiet=1)
+    scripts_ok = compileall.compile_dir(str(SCRIPTS), quiet=1)
+    success = backend_ok and scripts_ok
     if success:
         print("    PASS")
     else:
@@ -39,12 +41,9 @@ def check_import() -> bool:
 
 def check_pytest() -> bool:
     print("==> pytest")
-    env = os.environ.copy()
-    env["PYTHONPATH"] = str(BACKEND)
     result = subprocess.run(
-        [sys.executable, "-m", "pytest", str(BACKEND / "tests"), "-v"],
+        [sys.executable, "-m", "pytest", "-v"],
         cwd=str(ROOT),
-        env=env,
     )
     if result.returncode == 0:
         print("    PASS")
@@ -56,8 +55,8 @@ def check_pytest() -> bool:
 def main() -> int:
     results = [
         check_compile(),
-        check_pytest(),
         check_import(),
+        check_pytest(),
     ]
 
     print()
