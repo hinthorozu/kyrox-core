@@ -1,7 +1,7 @@
 # Platform Services — Sprint 0.4.0 Design Proposal
 
-**Status:** Design / backlog only — no implementation in this document  
-**Target release:** v0.4.0  
+**Status:** Implemented — v0.4.0 (Sprint 0.4.0)  
+**Target release:** v0.4.0 — **released**  
 **Prerequisite:** v0.3.0 Identity Platform (Organization & Membership) — **completed**
 
 ---
@@ -16,12 +16,12 @@ Sprint 0.4.0 delivers **shared platform services** that products consume without
 
 ## 2. Scope Summary
 
-| Service | Current state (v0.3.0) | Sprint 0.4.0 target |
+| Service | Current state (v0.4.0) | Sprint 0.4.0 target |
 |---------|------------------------|----------------------|
-| **Audit** | Domain + application service + repository + migration (`audit_logs`) | Public query API, identity hook integration, permission `audit.logs.read` |
-| **Settings** | Not started | Tenant + system scoped key/value store with validation API |
-| **Background Jobs** | Not started | Job registration, enqueue, status, worker contract |
-| **Notifications** | Not started | Dispatch abstraction (email first); no product templates in Core |
+| **Audit** | Domain + append service + query API + permission `audit.logs.read` | Public query API, identity hook integration, permission `audit.logs.read` |
+| **Settings** | Org + system scoped settings API; permissions `settings.platform.read`, `settings.platform.update` | Tenant + system scoped key/value store with validation API |
+| **Background Jobs** | Enqueue, status, in-process worker; permissions `jobs.platform.enqueue`, `jobs.platform.read` | Job registration, enqueue, status, worker contract |
+| **Notifications** | Async dispatch via jobs; settings-aware suppression; permissions `notifications.platform.send`, `notifications.platform.read` | Dispatch abstraction (email first); no product templates in Core |
 
 **Out of scope for 0.4.0**
 

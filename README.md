@@ -23,31 +23,32 @@
 | Backend architecture standards | Completed (Sprint 0.2.5) |
 | Data foundation (SQLAlchemy, Alembic, migrations) | Completed |
 | Identity platform — authentication & authorization | Completed (v0.2.0) |
-| Identity platform — organization & membership | Completed (**v0.3.0**) |
-| Database migrations | Active (Alembic head: `20260701_0016`) |
-| Public API endpoints | Health, auth, organizations, memberships |
-| Platform Services (audit API, settings, jobs, notifications) | Planned (Sprint 0.4.0) |
+| Identity platform — organization & membership | Completed (v0.3.0) |
+| Platform Services — audit, settings, jobs, notifications | Completed (**v0.4.0**) |
+| Database migrations | Active (Alembic head: `20260701_0024`) |
+| Public API endpoints | Health, auth, organizations, memberships, audit, settings, jobs, notifications |
 | Product endpoints | Not implemented |
 
-**Test suite:** 228 tests passing, 1 skipped (SQLite in CI/local; no PostgreSQL required for tests).
+**Test suite:** 307 tests passing, 1 skipped (SQLite in CI/local; no PostgreSQL required for tests).
 
-**Latest release:** [v0.3.0](CHANGELOG.md#030--2026-07-01) — Organization & Membership Platform (Sprint 0.3.5).
+**Latest release:** [v0.4.0](CHANGELOG.md#040--2026-07-01) — Platform Services (Sprint 0.4.0).
 
 ## Current Status
 
-**Identity Platform — completed (v0.3.0)**
+**Platform Services — completed (v0.4.0)**
 
-Delivered across Sprint 0.3.2–0.3.5:
+Delivered across Sprint 0.4.1–0.4.4:
 
-- Authentication: Argon2id passwords, JWT access tokens, refresh tokens, sessions
-- Authorization: RBAC with `require_permission`, explicit `X-Organization-Id` header
-- Organization & membership: canonical domain, invite/accept flow, org CRUD API
-- Alembic migrations through membership schema cleanup (`20260701_0016`)
-- Architecture, migration, and API tests
+- **Audit Query API** — org-scoped audit log listing with cursor pagination
+- **Settings Platform** — organization and system-scoped key/value settings
+- **Background Jobs Platform** — enqueue, status polling, in-process worker with handler registry
+- **Notifications Platform** — async email dispatch via jobs; settings-aware suppression; PII-safe stub adapter
+- Alembic migrations through `20260701_0024`
+- Architecture, import-boundary, integration, and API tests
 
-**Next milestone: v0.4.0 — Platform Services**
+**Next milestone: v1.0.0 — FAIR CRM Integration Preparation**
 
-Planned: Audit query API, Settings, Background Jobs, Notifications. See [Platform Services Design](docs/PLATFORM_SERVICES_DESIGN.md).
+See [Roadmap](docs/ROADMAP.md).
 
 Run quality checks:
 
@@ -72,6 +73,19 @@ python scripts/quality_check.py
 | `POST` | `/api/v1/memberships/invites/accept` | Accept invite (JWT only) |
 | `POST` | `/api/v1/memberships/{id}/suspend` | Suspend membership (`identity.memberships.update`) |
 | `DELETE` | `/api/v1/memberships/{id}` | Remove membership (`identity.memberships.remove`) |
+| `GET` | `/api/v1/organizations/{id}/audit-logs` | List audit logs (`audit.logs.read`) |
+| `GET` | `/api/v1/organizations/{id}/settings` | List org settings (`settings.platform.read`) |
+| `GET` | `/api/v1/organizations/{id}/settings/{key}` | Get org setting (`settings.platform.read`) |
+| `PUT` | `/api/v1/organizations/{id}/settings/{key}` | Upsert org setting (`settings.platform.update`) |
+| `DELETE` | `/api/v1/organizations/{id}/settings/{key}` | Delete org setting (`settings.platform.update`) |
+| `GET` | `/api/v1/system/settings` | List system settings (super-admin) |
+| `GET` | `/api/v1/system/settings/{key}` | Get system setting (super-admin) |
+| `PUT` | `/api/v1/system/settings/{key}` | Upsert system setting (super-admin) |
+| `DELETE` | `/api/v1/system/settings/{key}` | Delete system setting (super-admin) |
+| `POST` | `/api/v1/organizations/{id}/jobs` | Enqueue background job (`jobs.platform.enqueue`) |
+| `GET` | `/api/v1/jobs/{id}` | Get job status (`jobs.platform.read`) |
+| `POST` | `/api/v1/organizations/{id}/notifications/send` | Send notification (`notifications.platform.send`) |
+| `GET` | `/api/v1/notifications/{id}` | Get notification status (`notifications.platform.read`) |
 
 Protected org-scoped routes require `Authorization: Bearer <token>` and `X-Organization-Id: <uuid>`.
 
@@ -82,8 +96,8 @@ Protected org-scoped routes require `Authorization: Bearer <token>` and `X-Organ
 | **v0.1.0** | Foundation — architecture, backend scaffold, data layer, health checks | Completed |
 | **v0.2.0** | Identity — auth, authorization, legacy persistence, hardening | Completed |
 | **v0.3.0** | Identity — organization & membership (full stack) | Completed |
-| **v0.4.0** | Platform Services — audit, settings, jobs, notifications | Planned |
-| **v1.0.0** | FAIR CRM integration / production readiness | Later |
+| **v0.4.0** | Platform Services — audit, settings, jobs, notifications | Completed |
+| **v1.0.0** | FAIR CRM integration / production readiness | Next |
 
 See [docs/ROADMAP.md](docs/ROADMAP.md) for sprint details.
 
@@ -93,10 +107,17 @@ Start here:
 
 - **[Backend Architecture Standards](docs/BACKEND_ARCHITECTURE_STANDARDS.md)** — layered architecture, modules, dependency rules, testing
 - **[Identity Platform Design](docs/IDENTITY_PLATFORM_DESIGN.md)** — users, organizations, membership, RBAC, authentication
-- **[Platform Services Design](docs/PLATFORM_SERVICES_DESIGN.md)** — Sprint 0.4.0 backlog and technical proposal
+- **[Platform Services Design](docs/PLATFORM_SERVICES_DESIGN.md)** — Sprint 0.4.0 deliverables and integration contracts
 - **[Roadmap](docs/ROADMAP.md)** — sprint plan through FAIR CRM integration
 - **[Changelog](CHANGELOG.md)** — release history
 - **[Decisions](docs/DECISIONS/)** — architecture decision records (ADRs)
+
+Platform service design docs:
+
+- [Audit Query Platform Design](docs/AUDIT_QUERY_PLATFORM_DESIGN.md)
+- [Settings Platform Design](docs/SETTINGS_PLATFORM_DESIGN.md)
+- [Background Jobs Platform Design](docs/BACKGROUND_JOBS_PLATFORM_DESIGN.md)
+- [Notifications Platform Design](docs/NOTIFICATIONS_PLATFORM_DESIGN.md)
 
 ## Products Using Core
 

@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 
-_ALLOWED_MODULES = frozenset({"audit", "core", "identity", "settings"})
+_ALLOWED_MODULES = frozenset({"audit", "core", "identity", "jobs", "notifications", "settings"})
 
 
 @dataclass(frozen=True, slots=True)

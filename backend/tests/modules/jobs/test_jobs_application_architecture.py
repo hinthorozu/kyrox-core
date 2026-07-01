@@ -1,0 +1,54 @@
+import ast
+from pathlib import Path
+
+FORBIDDEN_IMPORT_MARKERS = ("infrastructure", "api", "fastapi", "sqlalchemy")
+
+APPLICATION_FILES = (
+    "enqueue_job.py",
+    "get_job.py",
+    "process_pending_jobs.py",
+    "policy.py",
+    "commands.py",
+    "results.py",
+    "job_result_mapper.py",
+)
+
+
+def _application_file_path(filename: str) -> Path:
+    return (
+        Path(__file__).resolve().parents[3]
+        / "app"
+        / "modules"
+        / "jobs"
+        / "application"
+        / filename
+    )
+
+
+def _collect_forbidden_imports(path: Path) -> list[str]:
+    module = ast.parse(path.read_text(encoding="utf-8"))
+    forbidden: list[str] = []
+
+    for node in ast.walk(module):
+        if isinstance(node, ast.ImportFrom) and node.module:
+            module_name = node.module.lower()
+            if any(marker in module_name for marker in FORBIDDEN_IMPORT_MARKERS):
+                forbidden.append(node.module)
+        elif isinstance(node, ast.Import):
+            for alias in node.names:
+                module_name = alias.name.lower()
+                if any(marker in module_name for marker in FORBIDDEN_IMPORT_MARKERS):
+                    forbidden.append(alias.name)
+
+    return forbidden
+
+
+def test_jobs_application_modules_do_not_import_outer_layers() -> None:
+    violations: dict[str, list[str]] = {}
+
+    for filename in APPLICATION_FILES:
+        forbidden = _collect_forbidden_imports(_application_file_path(filename))
+        if forbidden:
+            violations[filename] = forbidden
+
+    assert violations == {}
