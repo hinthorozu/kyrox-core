@@ -9,38 +9,26 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
+from app.core.config import settings
 from app.core.exceptions import register_exception_handlers
 from app.db.base import Base
 from app.db.session import get_db
-from app.modules.identity.api.context import AuthorizationContext
-from app.modules.identity.api.dependencies import get_authorization_service
-from app.modules.identity.api.guards import require_permission
+from app.modules.identity.api.authorization.context import AuthorizationContext
+from app.modules.identity.api.authorization.dependencies import get_authorization_service
+from app.modules.identity.api.authorization.guards import require_permission
 from app.modules.identity.application.authorization import AuthorizationService
-from app.modules.identity.domain.entities import (
-    Membership,
-    Organization,
-    Permission,
-    Role,
-    RolePermission,
-    User,
+from app.modules.identity.domain.authentication.value_objects.identity.session_id import SessionId
+from app.modules.identity.domain.authentication.value_objects.identity.user_id import UserId
+from app.modules.identity.domain.authentication.value_objects.security.access_token import (
+    AccessTokenClaims,
 )
-from app.modules.identity.domain.enums import (
-    MembershipStatus,
-    OrganizationStatus,
-    UserStatus,
+from app.modules.identity.domain.authentication.value_objects.security.email import Email
+from app.modules.identity.domain.entities import Organization, User
+from app.modules.identity.infrastructure.authentication.security.jwt_token_service import (
+    JwtTokenService,
 )
-from app.modules.identity.domain.ports import AccessTokenClaims
 from app.modules.identity.infrastructure.persistence import models as identity_models  # noqa: F401
-from app.modules.identity.infrastructure.repositories import (
-    SqlAlchemyMembershipRepository,
-    SqlAlchemyOrganizationRepository,
-    SqlAlchemyPermissionChecker,
-    SqlAlchemyPermissionRepository,
-    SqlAlchemyRolePermissionRepository,
-    SqlAlchemyRoleRepository,
-    SqlAlchemyUserRepository,
-)
-from app.modules.identity.infrastructure.security.jwt_token_service import JwtTokenService
+from authorization_test_helpers import build_authorization_service, seed_user_role_with_permission
 
 
 @pytest.fixture
@@ -59,88 +47,24 @@ def db_session() -> Generator[Session, None, None]:
         engine.dispose()
 
 
-def _now() -> datetime:
-    return datetime(2026, 7, 1, 12, 0, 0, tzinfo=UTC)
-
-
 def _seed(db_session: Session) -> tuple[User, Organization, str]:
-    user_repo = SqlAlchemyUserRepository(db_session)
-    org_repo = SqlAlchemyOrganizationRepository(db_session)
-    membership_repo = SqlAlchemyMembershipRepository(db_session)
-    role_repo = SqlAlchemyRoleRepository(db_session)
-    permission_repo = SqlAlchemyPermissionRepository(db_session)
-    role_permission_repo = SqlAlchemyRolePermissionRepository(db_session)
-
-    user = user_repo.create(
-        User(
-            id=uuid.uuid4(),
-            email="guard@example.com",
-            password_hash="hash",
-            status=UserStatus.ACTIVE,
-            is_super_admin=False,
-            created_at=_now(),
-            updated_at=_now(),
-        )
+    seed = seed_user_role_with_permission(db_session)
+    token_service = JwtTokenService(
+        secret_key=settings.JWT_SECRET_KEY,
+        algorithm=settings.JWT_ALGORITHM,
     )
-    org = org_repo.create(
-        Organization(
-            id=uuid.uuid4(),
-            name="Acme",
-            slug="acme",
-            status=OrganizationStatus.ACTIVE,
-            created_at=_now(),
-            updated_at=_now(),
-        )
-    )
-    role = role_repo.create(
-        Role(
-            id=uuid.uuid4(),
-            organization_id=org.id,
-            name="Member",
-            slug="member",
-            is_system=True,
-            created_at=_now(),
-            updated_at=_now(),
-        )
-    )
-    permission = permission_repo.create(
-        Permission(
-            id=uuid.uuid4(),
-            code="core.user.read",
-            description="Read users",
-            module="core",
-            is_system=True,
-            created_at=_now(),
-            updated_at=_now(),
-        )
-    )
-    role_permission_repo.grant(RolePermission(role_id=role.id, permission_id=permission.id))
-    membership_repo.create(
-        Membership(
-            id=uuid.uuid4(),
-            user_id=user.id,
-            organization_id=org.id,
-            status=MembershipStatus.ACTIVE,
-            role_id=role.id,
-            created_at=_now(),
-            updated_at=_now(),
-        )
-    )
-    db_session.commit()
-
-    token_service = JwtTokenService()
     now = datetime.now(UTC)
     access_token = token_service.create_access_token(
         AccessTokenClaims(
-            sub=user.id,
-            email=user.email,
-            sid=uuid.uuid4(),
+            sub=UserId(seed.user.id),
+            email=Email(value=seed.user.email),
+            sid=SessionId(uuid.uuid4()),
             exp=now + timedelta(minutes=15),
             iat=now,
             jti=uuid.uuid4(),
         )
     )
-    return user, org, access_token
+    return seed.user, seed.org, access_token.value
 
 
 @pytest.fixture
@@ -175,10 +99,7 @@ def guard_client(db_session: Session) -> Generator[TestClient, None, None]:
             raise
 
     def override_auth_service() -> AuthorizationService:
-        return AuthorizationService(
-            permission_checker=SqlAlchemyPermissionChecker(db_session),
-            user_repository=SqlAlchemyUserRepository(db_session),
-        )
+        return build_authorization_service(db_session)
 
     app.dependency_overrides[get_db] = override_get_db
     app.dependency_overrides[get_authorization_service] = override_auth_service

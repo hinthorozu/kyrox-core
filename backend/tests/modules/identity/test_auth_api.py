@@ -1,6 +1,5 @@
 import uuid
 from collections.abc import Generator
-from datetime import UTC, datetime
 
 import pytest
 from fastapi.testclient import TestClient
@@ -11,11 +10,14 @@ from sqlalchemy.pool import StaticPool
 from app.db.base import Base
 from app.db.session import get_db
 from app.main import create_app
-from app.modules.identity.domain.entities import User
-from app.modules.identity.domain.enums import UserStatus
+from app.modules.identity.domain.authentication.entities.user import User as AuthUser
+from app.modules.identity.domain.authentication.enums.user_status import UserStatus
+from app.modules.identity.domain.authentication.value_objects.identity.user_id import UserId
+from app.modules.identity.domain.authentication.value_objects.security.email import Email
+from app.modules.identity.infrastructure.authentication.clock import UtcClock
+from app.modules.identity.infrastructure.authentication.repositories import SqlAlchemyUserRepository
+from app.modules.identity.infrastructure.authentication.security import Argon2idPasswordHasher
 from app.modules.identity.infrastructure.persistence import models as identity_models  # noqa: F401
-from app.modules.identity.infrastructure.repositories import SqlAlchemyUserRepository
-from app.modules.identity.infrastructure.security.argon2_password_hasher import Argon2idPasswordHasher
 
 
 @pytest.fixture
@@ -50,22 +52,19 @@ def client(db_session: Session) -> Generator[TestClient, None, None]:
     app.dependency_overrides.clear()
 
 
-def _now() -> datetime:
-    return datetime(2026, 7, 1, 12, 0, 0, tzinfo=UTC)
-
-
-def _seed_active_user(db_session: Session, email: str, password: str) -> User:
+def _seed_active_user(db_session: Session, email: str, password: str) -> AuthUser:
     hasher = Argon2idPasswordHasher()
-    user_repo = SqlAlchemyUserRepository(db_session)
-    return user_repo.create(
-        User(
-            id=uuid.uuid4(),
-            email=email,
+    clock = UtcClock()
+    user_repo = SqlAlchemyUserRepository(db_session, clock)
+    now = clock.now()
+    return user_repo.add(
+        AuthUser(
+            id=UserId(uuid.uuid4()),
+            email=Email.create(email),
             password_hash=hasher.hash(password),
             status=UserStatus.ACTIVE,
-            is_super_admin=False,
-            created_at=_now(),
-            updated_at=_now(),
+            created_at=now,
+            updated_at=now,
         )
     )
 

@@ -1,4 +1,4 @@
-from app.modules.identity.infrastructure.persistence.models import (
+from app.modules.identity.infrastructure.authorization.persistence.models import (
     PermissionModel,
     RoleModel,
     RolePermissionModel,
@@ -10,9 +10,10 @@ def test_identity_role_table_metadata() -> None:
 
     assert table.name == "identity_roles"
     column_names = {column.name for column in table.columns}
-    assert "organization_id" in column_names
+    assert "scope" in column_names
     assert "slug" in column_names
     assert "is_system" in column_names
+    assert "organization_id" not in column_names
 
 
 def test_identity_permission_table_metadata() -> None:
@@ -22,9 +23,9 @@ def test_identity_permission_table_metadata() -> None:
     assert table.c.code.unique is True
     assert {column.name for column in table.columns} == {
         "id",
+        "group_id",
         "code",
         "description",
-        "module",
         "is_system",
         "created_at",
         "updated_at",

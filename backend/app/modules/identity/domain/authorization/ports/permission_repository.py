@@ -1,0 +1,45 @@
+from typing import Protocol
+
+from app.modules.identity.domain.authorization.entities.permission import Permission
+from app.modules.identity.domain.authorization.entities.permission_group import PermissionGroup
+from app.modules.identity.domain.authorization.value_objects.identity.permission_group_id import (
+    PermissionGroupId,
+)
+from app.modules.identity.domain.authorization.value_objects.identity.permission_id import PermissionId
+from app.modules.identity.domain.authorization.value_objects.rbac.permission_code import PermissionCode
+from app.modules.identity.domain.authorization.value_objects.rbac.permission_group_code import (
+    PermissionGroupCode,
+)
+from app.modules.identity.domain.authorization.value_objects.rbac.permission_module import (
+    PermissionModule,
+)
+
+
+class PermissionGroupRepository(Protocol):
+    def add(self, group: PermissionGroup) -> PermissionGroup: ...
+
+    def update(self, group: PermissionGroup) -> PermissionGroup: ...
+
+    def remove(self, group_id: PermissionGroupId) -> None: ...
+
+    def get_by_id(self, group_id: PermissionGroupId) -> PermissionGroup | None: ...
+
+    def get_by_code(self, code: PermissionGroupCode) -> PermissionGroup | None: ...
+
+    def list_by_module(self, module: PermissionModule) -> list[PermissionGroup]: ...
+
+
+class PermissionRepository(Protocol):
+    def add(self, permission: Permission) -> Permission: ...
+
+    def update(self, permission: Permission) -> Permission: ...
+
+    def remove(self, permission_id: PermissionId) -> None: ...
+
+    def get_by_id(self, permission_id: PermissionId) -> Permission | None: ...
+
+    def get_by_code(self, code: PermissionCode) -> Permission | None: ...
+
+    def list_by_group_id(self, group_id: PermissionGroupId) -> list[Permission]: ...
+
+    def list_all(self) -> list[Permission]: ...

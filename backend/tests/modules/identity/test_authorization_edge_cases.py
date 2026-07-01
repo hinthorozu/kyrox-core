@@ -6,30 +6,20 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.db.base import Base
-from app.modules.identity.application.authorization import AuthorizationService
-from app.modules.identity.domain.entities import (
-    Membership,
-    Organization,
-    Permission,
-    Role,
-    RolePermission,
-    User,
+from app.modules.identity.application.authorization import CheckPermissionCommand
+from app.modules.identity.domain.authorization.entities import OrganizationRole, Role
+from app.modules.identity.domain.authorization.enums import AssignmentStatus, RoleScope
+from app.modules.identity.domain.authorization.value_objects.identity import (
+    OrganizationId,
+    OrganizationRoleId,
+    RoleId,
+    UserId,
 )
-from app.modules.identity.domain.enums import (
-    MembershipStatus,
-    OrganizationStatus,
-    UserStatus,
-)
+from app.modules.identity.domain.authorization.value_objects.rbac import RoleSlug
+from app.modules.identity.domain.entities import Organization
+from app.modules.identity.domain.enums import OrganizationStatus, UserStatus
 from app.modules.identity.infrastructure.persistence import models as identity_models  # noqa: F401
-from app.modules.identity.infrastructure.repositories import (
-    SqlAlchemyMembershipRepository,
-    SqlAlchemyOrganizationRepository,
-    SqlAlchemyPermissionChecker,
-    SqlAlchemyPermissionRepository,
-    SqlAlchemyRolePermissionRepository,
-    SqlAlchemyRoleRepository,
-    SqlAlchemyUserRepository,
-)
+from authorization_test_helpers import build_authorization_service, seed_user_role_with_permission
 
 
 @pytest.fixture
@@ -50,116 +40,102 @@ def _now() -> datetime:
 
 class AuthorizationSeed:
     def __init__(self, db_session: Session) -> None:
-        self.db_session = db_session
-        self.user_repo = SqlAlchemyUserRepository(db_session)
-        self.org_repo = SqlAlchemyOrganizationRepository(db_session)
-        self.membership_repo = SqlAlchemyMembershipRepository(db_session)
-        self.role_repo = SqlAlchemyRoleRepository(db_session)
-        self.permission_repo = SqlAlchemyPermissionRepository(db_session)
-        self.role_permission_repo = SqlAlchemyRolePermissionRepository(db_session)
-        self.checker = SqlAlchemyPermissionChecker(db_session)
+        self.seed = seed_user_role_with_permission(db_session)
 
-        self.user = self.user_repo.create(
-            User(
-                id=uuid.uuid4(),
-                email="member@example.com",
-                password_hash="hash",
-                status=UserStatus.ACTIVE,
-                is_super_admin=False,
-                created_at=_now(),
-                updated_at=_now(),
-            )
-        )
-        self.org = self.org_repo.create(
-            Organization(
-                id=uuid.uuid4(),
-                name="Acme",
-                slug="acme",
-                status=OrganizationStatus.ACTIVE,
-                created_at=_now(),
-                updated_at=_now(),
-            )
-        )
-        self.role = self.role_repo.create(
-            Role(
-                id=uuid.uuid4(),
-                organization_id=self.org.id,
-                name="Member",
-                slug="member",
-                is_system=True,
-                created_at=_now(),
-                updated_at=_now(),
-            )
-        )
-        self.permission = self.permission_repo.create(
-            Permission(
-                id=uuid.uuid4(),
-                code="core.user.read",
-                description="Read users",
-                module="core",
-                is_system=True,
-                created_at=_now(),
-                updated_at=_now(),
-            )
-        )
-        self.role_permission_repo.grant(
-            RolePermission(role_id=self.role.id, permission_id=self.permission.id)
-        )
-        self.membership = self.membership_repo.create(
-            Membership(
-                id=uuid.uuid4(),
-                user_id=self.user.id,
-                organization_id=self.org.id,
-                status=MembershipStatus.ACTIVE,
-                role_id=self.role.id,
-                created_at=_now(),
-                updated_at=_now(),
-            )
-        )
-        self.db_session.commit()
+    @property
+    def db_session(self) -> Session:
+        return self.seed.db_session
+
+    @property
+    def user(self):
+        return self.seed.user
+
+    @property
+    def org(self):
+        return self.seed.org
+
+    @property
+    def user_repo(self):
+        return self.seed.user_repo
+
+    @property
+    def org_repo(self):
+        return self.seed.org_repo
+
+    @property
+    def role_repo(self):
+        return self.seed.role_repo
+
+    @property
+    def org_role_repo(self):
+        return self.seed.org_role_repo
+
+    @property
+    def user_role_repo(self):
+        return self.seed.user_role_repo
+
+    @property
+    def user_role(self):
+        return self.seed.user_role
+
+    @property
+    def org_role(self):
+        return self.seed.org_role
+
+    @property
+    def role(self):
+        return self.seed.role
+
+    @property
+    def permission(self):
+        return self.seed.permission
+
+    @property
+    def checker(self):
+        return self.seed.checker
 
     def assert_has_permission(self, expected: bool) -> None:
         result = self.checker.has_permission(
-            self.user.id,
-            self.org.id,
+            UserId(self.user.id),
+            OrganizationId(self.org.id),
             self.permission.code,
         )
         assert result is expected
 
 
-def test_checker_rejects_inactive_membership(db_session: Session) -> None:
+def test_checker_rejects_inactive_user_role(db_session: Session) -> None:
     seed = AuthorizationSeed(db_session)
-    seed.membership.status = MembershipStatus.INACTIVE
-    seed.membership.updated_at = _now()
-    seed.membership_repo.update(seed.membership)
+    user_role = seed.user_role_repo.get_by_id(seed.user_role.id)
+    assert user_role is not None
+    user_role.status = AssignmentStatus.INACTIVE
+    seed.user_role_repo.update(user_role)
     seed.db_session.commit()
 
     seed.assert_has_permission(False)
 
 
-def test_checker_rejects_suspended_membership(db_session: Session) -> None:
+def test_checker_rejects_revoked_user_role(db_session: Session) -> None:
     seed = AuthorizationSeed(db_session)
-    seed.membership.status = MembershipStatus.SUSPENDED
-    seed.membership.updated_at = _now()
-    seed.membership_repo.update(seed.membership)
+    seed.user_role_repo.revoke(seed.user_role.id)
     seed.db_session.commit()
 
     seed.assert_has_permission(False)
 
 
-def test_checker_rejects_deleted_membership(db_session: Session) -> None:
+def test_checker_rejects_removed_user_role(db_session: Session) -> None:
     seed = AuthorizationSeed(db_session)
-    seed.membership_repo.soft_delete(seed.membership.id)
+    seed.user_role_repo.remove(seed.user_role.id)
     seed.db_session.commit()
 
     seed.assert_has_permission(False)
 
 
-def test_checker_rejects_null_role_id(db_session: Session) -> None:
+def test_checker_rejects_inactive_organization_role(db_session: Session) -> None:
     seed = AuthorizationSeed(db_session)
-    seed.membership.role_id = None
-    seed.membership.updated_at = _now()
-    seed.membership_repo.update(seed.membership)
+    org_role = seed.org_role_repo.get_by_id(seed.org_role.id)
+    assert org_role is not None
+    org_role.status = AssignmentStatus.INACTIVE
+    seed.org_role_repo.update(org_role)
     seed.db_session.commit()
 
     seed.assert_has_permission(False)
@@ -167,7 +143,7 @@ def test_checker_rejects_null_role_id(db_session: Session) -> None:
 
 def test_checker_rejects_soft_deleted_role(db_session: Session) -> None:
     seed = AuthorizationSeed(db_session)
-    seed.role_repo.soft_delete(seed.role.id)
+    seed.role_repo.remove(seed.role.id)
     seed.db_session.commit()
 
     seed.assert_has_permission(False)
@@ -185,20 +161,32 @@ def test_checker_rejects_wrong_organization_role(db_session: Session) -> None:
             updated_at=_now(),
         )
     )
-    foreign_role = seed.role_repo.create(
+    foreign_role = seed.role_repo.add(
         Role(
-            id=uuid.uuid4(),
-            organization_id=other_org.id,
+            id=RoleId(uuid.uuid4()),
             name="Foreign",
-            slug="foreign",
+            slug=RoleSlug.create("foreign"),
+            scope=RoleScope.ORGANIZATION,
             is_system=True,
             created_at=_now(),
             updated_at=_now(),
         )
     )
-    seed.membership.role_id = foreign_role.id
-    seed.membership.updated_at = _now()
-    seed.membership_repo.update(seed.membership)
+    foreign_org_role = seed.org_role_repo.add(
+        OrganizationRole(
+            id=OrganizationRoleId(uuid.uuid4()),
+            organization_id=OrganizationId(other_org.id),
+            role_id=foreign_role.id,
+            status=AssignmentStatus.ACTIVE,
+            is_default=False,
+            created_at=_now(),
+            updated_at=_now(),
+        )
+    )
+    user_role = seed.user_role_repo.get_by_id(seed.user_role.id)
+    assert user_role is not None
+    user_role.organization_role_id = foreign_org_role.id
+    seed.user_role_repo.update(user_role)
     seed.db_session.commit()
 
     seed.assert_has_permission(False)
@@ -231,15 +219,18 @@ def test_service_super_admin_bypasses_core_permission(db_session: Session) -> No
     user.is_super_admin = True
     user.updated_at = _now()
     seed.user_repo.update(user)
-    seed.membership_repo.soft_delete(seed.membership.id)
+    seed.user_role_repo.revoke(seed.user_role.id)
     seed.db_session.commit()
 
-    service = AuthorizationService(
-        permission_checker=seed.checker,
-        user_repository=seed.user_repo,
-    )
+    service = build_authorization_service(db_session)
 
-    assert service.has_permission(seed.user.id, seed.org.id, "core.user.read") is True
+    assert service.has_permission(
+        CheckPermissionCommand(
+            user_id=UserId(seed.user.id),
+            organization_id=OrganizationId(seed.org.id),
+            permission_code="core.user.read",
+        )
+    )
 
 
 def test_service_super_admin_does_not_bypass_non_core_permission(db_session: Session) -> None:
@@ -251,12 +242,18 @@ def test_service_super_admin_does_not_bypass_non_core_permission(db_session: Ses
     seed.user_repo.update(user)
     seed.db_session.commit()
 
-    service = AuthorizationService(
-        permission_checker=seed.checker,
-        user_repository=seed.user_repo,
-    )
+    service = build_authorization_service(db_session)
 
-    assert service.has_permission(seed.user.id, seed.org.id, "product.user.read") is False
+    assert (
+        service.has_permission(
+            CheckPermissionCommand(
+                user_id=UserId(seed.user.id),
+                organization_id=OrganizationId(seed.org.id),
+                permission_code="product.user.read",
+            )
+        )
+        is False
+    )
 
 
 def test_service_super_admin_requires_active_user(db_session: Session) -> None:
@@ -269,9 +266,15 @@ def test_service_super_admin_requires_active_user(db_session: Session) -> None:
     seed.user_repo.update(user)
     seed.db_session.commit()
 
-    service = AuthorizationService(
-        permission_checker=seed.checker,
-        user_repository=seed.user_repo,
-    )
+    service = build_authorization_service(db_session)
 
-    assert service.has_permission(seed.user.id, seed.org.id, "core.user.read") is False
+    assert (
+        service.has_permission(
+            CheckPermissionCommand(
+                user_id=UserId(seed.user.id),
+                organization_id=OrganizationId(seed.org.id),
+                permission_code="core.user.read",
+            )
+        )
+        is False
+    )

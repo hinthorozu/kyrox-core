@@ -1,0 +1,19 @@
+from typing import Protocol
+
+from app.modules.identity.domain.organization.entities.organization import Organization
+from app.modules.identity.domain.organization.value_objects.identity.organization_id import OrganizationId
+from app.modules.identity.domain.organization.value_objects.profile.organization_slug import OrganizationSlug
+
+
+class OrganizationRepository(Protocol):
+    def add(self, organization: Organization) -> Organization: ...
+
+    def update(self, organization: Organization) -> Organization: ...
+
+    def remove(self, organization_id: OrganizationId) -> None: ...
+
+    def get_by_id(self, organization_id: OrganizationId) -> Organization | None: ...
+
+    def get_by_slug(self, slug: OrganizationSlug) -> Organization | None: ...
+
+    def exists_by_slug(self, slug: OrganizationSlug) -> bool: ...
