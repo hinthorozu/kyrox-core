@@ -1,6 +1,10 @@
+import re
 from dataclasses import dataclass
 
-_ALLOWED_MODULES = frozenset({"audit", "core", "identity", "jobs", "notifications", "settings"})
+_MODULE_PATTERN = re.compile(r"^[a-z][a-z0-9_]*$")
+
+# Documented platform modules; product modules (e.g. fair_crm) use the same validation rules.
+_PLATFORM_MODULES = frozenset({"audit", "core", "identity", "jobs", "notifications", "settings"})
 
 
 @dataclass(frozen=True, slots=True)
@@ -10,9 +14,17 @@ class PermissionModule:
     @classmethod
     def create(cls, raw: str) -> "PermissionModule":
         normalized = raw.strip().lower()
-        if normalized not in _ALLOWED_MODULES:
+        if not normalized or not _MODULE_PATTERN.match(normalized):
             raise ValueError("Invalid permission module")
         return cls(value=normalized)
+
+    @classmethod
+    def platform_modules(cls) -> frozenset[str]:
+        return _PLATFORM_MODULES
+
+    @property
+    def is_platform_module(self) -> bool:
+        return self.value in _PLATFORM_MODULES
 
     def __post_init__(self) -> None:
         if not isinstance(self.value, str) or not self.value:

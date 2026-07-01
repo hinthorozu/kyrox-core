@@ -42,3 +42,14 @@ class AuditLogListResponse(BaseModel):
 
 class ErrorResponse(BaseModel):
     detail: str
+
+
+class RecordAuditEventRequest(BaseModel):
+    action: str = Field(..., min_length=1, max_length=255)
+    resource_type: str = Field(..., min_length=1, max_length=128)
+    resource_id: str | None = Field(default=None, max_length=255)
+    old_values: dict | None = None
+    new_values: dict | None = None
+    metadata: dict | None = None
+    ip_address: str | None = Field(default=None, max_length=45)
+    user_agent: str | None = Field(default=None, max_length=512)

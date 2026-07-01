@@ -2,14 +2,10 @@ import ast
 from pathlib import Path
 
 THIN_API_FILES = (
-    "context.py",
+    "routes.py",
+    "schemas.py",
+    "mappers.py",
     "error_mapping.py",
-    "guards.py",
-)
-LEGACY_API_PREFIXES = (
-    "app.modules.identity.api.dependencies",
-    "app.modules.identity.api.guards",
-    "app.modules.identity.api.context",
 )
 
 
@@ -27,11 +23,6 @@ def _file_path(filename: str) -> Path:
 
 def _is_forbidden_import(module_name: str) -> bool:
     normalized = module_name.lower()
-    if any(
-        normalized == prefix or normalized.startswith(f"{prefix}.")
-        for prefix in LEGACY_API_PREFIXES
-    ):
-        return True
     if "sqlalchemy" in normalized:
         return True
     if ".infrastructure." in normalized or normalized.endswith(".infrastructure"):

@@ -25,7 +25,7 @@
 | Identity platform — authentication & authorization | Completed (v0.2.0) |
 | Identity platform — organization & membership | Completed (v0.3.0) |
 | Platform Services — audit, settings, jobs, notifications | Completed (**v0.4.0**) |
-| Database migrations | Active (Alembic head: `20260701_0024`) |
+| Database migrations | Active (Alembic head: `20260701_0025`) |
 | Public API endpoints | Health, auth, organizations, memberships, audit, settings, jobs, notifications |
 | Product endpoints | Not implemented |
 
@@ -43,7 +43,7 @@ Delivered across Sprint 0.4.1–0.4.4:
 - **Settings Platform** — organization and system-scoped key/value settings
 - **Background Jobs Platform** — enqueue, status polling, in-process worker with handler registry
 - **Notifications Platform** — async email dispatch via jobs; settings-aware suppression; PII-safe stub adapter
-- Alembic migrations through `20260701_0024`
+- Alembic migrations through `20260701_0025` (includes FAIR CRM customer permission seeds)
 - Architecture, import-boundary, integration, and API tests
 
 **Next milestone: v1.0.0 — FAIR CRM Integration Preparation**
@@ -74,6 +74,8 @@ python scripts/quality_check.py
 | `POST` | `/api/v1/memberships/{id}/suspend` | Suspend membership (`identity.memberships.update`) |
 | `DELETE` | `/api/v1/memberships/{id}` | Remove membership (`identity.memberships.remove`) |
 | `GET` | `/api/v1/organizations/{id}/audit-logs` | List audit logs (`audit.logs.read`) |
+| `POST` | `/api/v1/organizations/{id}/audit-events` | Record audit event (org membership required) |
+| `POST` | `/api/v1/organizations/{id}/authorization/check` | Check permission for current user (org membership required) |
 | `GET` | `/api/v1/organizations/{id}/settings` | List org settings (`settings.platform.read`) |
 | `GET` | `/api/v1/organizations/{id}/settings/{key}` | Get org setting (`settings.platform.read`) |
 | `PUT` | `/api/v1/organizations/{id}/settings/{key}` | Upsert org setting (`settings.platform.update`) |
@@ -87,6 +89,17 @@ python scripts/quality_check.py
 | `POST` | `/api/v1/organizations/{id}/notifications/send` | Send notification (`notifications.platform.send`) |
 | `GET` | `/api/v1/notifications/{id}` | Get notification status (`notifications.platform.read`) |
 
+### Product permissions (registered in Core RBAC)
+
+| Code | Product | Description |
+|------|---------|-------------|
+| `fair_crm.customers.create` | FAIR CRM | Create CRM customers |
+| `fair_crm.customers.read` | FAIR CRM | Read CRM customers |
+| `fair_crm.customers.update` | FAIR CRM | Update CRM customers |
+| `fair_crm.customers.archive` | FAIR CRM | Archive CRM customers |
+
+Seeded by migration `20260701_0025`. Assign to roles via Core RBAC; products enforce access through the authorization check API.
+
 Protected org-scoped routes require `Authorization: Bearer <token>` and `X-Organization-Id: <uuid>`.
 
 ## Roadmap (Summary)
@@ -97,7 +110,7 @@ Protected org-scoped routes require `Authorization: Bearer <token>` and `X-Organ
 | **v0.2.0** | Identity — auth, authorization, legacy persistence, hardening | Completed |
 | **v0.3.0** | Identity — organization & membership (full stack) | Completed |
 | **v0.4.0** | Platform Services — audit, settings, jobs, notifications | Completed |
-| **v1.0.0** | FAIR CRM integration / production readiness | Next |
+| **v1.0.0** | FAIR CRM integration / production readiness | In progress |
 
 See [docs/ROADMAP.md](docs/ROADMAP.md) for sprint details.
 
@@ -108,7 +121,7 @@ Start here:
 - **[Backend Architecture Standards](docs/BACKEND_ARCHITECTURE_STANDARDS.md)** — layered architecture, modules, dependency rules, testing
 - **[Identity Platform Design](docs/IDENTITY_PLATFORM_DESIGN.md)** — users, organizations, membership, RBAC, authentication
 - **[Platform Services Design](docs/PLATFORM_SERVICES_DESIGN.md)** — Sprint 0.4.0 deliverables and integration contracts
-- **[Roadmap](docs/ROADMAP.md)** — sprint plan through FAIR CRM integration
+- **[Product Integration Guide](docs/PRODUCT_INTEGRATION_GUIDE.md)** — how product services integrate via public APIs
 - **[Changelog](CHANGELOG.md)** — release history
 - **[Decisions](docs/DECISIONS/)** — architecture decision records (ADRs)
 

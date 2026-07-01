@@ -43,9 +43,24 @@ def test_permission_group_code_create_normalizes_value() -> None:
     assert code.value == "identity.users"
 
 
-def test_permission_module_rejects_unknown_module() -> None:
+def test_permission_module_accepts_product_namespace() -> None:
+    module = PermissionModule.create("fair_crm")
+    assert module.value == "fair_crm"
+    assert module.is_platform_module is False
+
+
+def test_permission_module_accepts_platform_modules() -> None:
+    for name in PermissionModule.platform_modules():
+        module = PermissionModule.create(name)
+        assert module.is_platform_module is True
+
+
+def test_permission_module_rejects_invalid_format() -> None:
     with pytest.raises(ValueError, match="Invalid permission module"):
-        PermissionModule.create("crm")
+        PermissionModule.create("crm-module")
+
+    with pytest.raises(ValueError, match="Invalid permission module"):
+        PermissionModule.create("")
 
 
 def test_role_slug_create_normalizes_value() -> None:

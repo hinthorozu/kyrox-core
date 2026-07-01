@@ -2,19 +2,37 @@ from datetime import datetime
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, status
 
-from app.modules.audit.api.dependencies import get_list_organization_audit_logs_use_case
-from app.modules.audit.api.error_mapping import map_audit_query_error
+from app.modules.audit.api.dependencies import (
+    get_list_organization_audit_logs_use_case,
+    get_record_organization_audit_event_use_case,
+)
+from app.modules.audit.api.error_mapping import map_audit_query_error, map_audit_record_error
 from app.modules.audit.api.mappers import (
     audit_log_list_params_to_command,
     audit_log_list_result_to_response,
+    audit_log_to_response,
+    record_audit_event_request_to_command,
 )
-from app.modules.audit.api.schemas import AuditLogListQueryParams, AuditLogListResponse, ErrorResponse
+from app.modules.audit.api.schemas import (
+    AuditLogListQueryParams,
+    AuditLogListResponse,
+    AuditLogResponse,
+    ErrorResponse,
+    RecordAuditEventRequest,
+)
 from app.modules.audit.application.list_organization_audit_logs import ListOrganizationAuditLogsUseCase
+from app.modules.audit.application.record_organization_audit_event import (
+    RecordOrganizationAuditEventUseCase,
+)
+from app.modules.audit.domain.exceptions import InvalidAuditEventError
 from app.modules.audit.domain.query_exceptions import InvalidAuditQueryError
-from app.modules.identity.api.authorization.context import AuthorizationContext
-from app.modules.identity.api.authorization.guards import require_permission
+from app.modules.identity.api.authorization.context import (
+    AuthenticatedOrganizationContext,
+    AuthorizationContext,
+)
+from app.modules.identity.api.authorization.guards import require_organization_membership, require_permission
 from app.modules.identity.api.membership.dependencies import assert_organization_scope
 
 router = APIRouter(tags=["audit"])
@@ -68,3 +86,31 @@ def list_organization_audit_logs(
         raise map_audit_query_error(exc) from exc
 
     return audit_log_list_result_to_response(result)
+
+
+@router.post(
+    "/organizations/{organization_id}/audit-events",
+    response_model=AuditLogResponse,
+    status_code=status.HTTP_201_CREATED,
+    responses={
+        400: {"model": ErrorResponse},
+        401: {"model": ErrorResponse},
+        403: {"model": ErrorResponse},
+        422: {"model": ErrorResponse},
+    },
+)
+def record_organization_audit_event(
+    organization_id: UUID,
+    body: RecordAuditEventRequest,
+    context: AuthenticatedOrganizationContext = Depends(require_organization_membership()),
+    use_case: RecordOrganizationAuditEventUseCase = Depends(get_record_organization_audit_event_use_case),
+) -> AuditLogResponse:
+    assert_organization_scope(organization_id, context)
+    try:
+        audit_log = use_case.execute(
+            record_audit_event_request_to_command(organization_id, context, body)
+        )
+    except InvalidAuditEventError as exc:
+        raise map_audit_record_error(exc) from exc
+
+    return audit_log_to_response(audit_log)

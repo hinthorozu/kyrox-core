@@ -12,7 +12,10 @@ from app.modules.identity.api.authentication.dependencies import (
     get_id_generator,
     get_user_repository,
 )
-from app.modules.identity.api.authorization.context import AuthorizationContext
+from app.modules.identity.api.authorization.context import (
+    AuthenticatedOrganizationContext,
+    AuthorizationContext,
+)
 from app.modules.identity.api.authorization.guards import require_permission
 from app.modules.identity.application.authentication.id_generator import IdGenerator
 from app.modules.identity.application.membership.accept_membership_invite import (
@@ -206,6 +209,9 @@ def require_scoped_membership(permission_code: str) -> Callable[..., MembershipI
     return dependency
 
 
-def assert_organization_scope(path_organization_id: UUID, context: AuthorizationContext) -> None:
+def assert_organization_scope(
+    path_organization_id: UUID,
+    context: AuthorizationContext | AuthenticatedOrganizationContext,
+) -> None:
     if path_organization_id != context.organization_id:
         raise AppException("Organization scope mismatch", status_code=400)

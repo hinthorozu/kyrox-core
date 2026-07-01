@@ -4,6 +4,13 @@ All notable changes to KYROX Core are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- Alembic `20260701_0025` — seed FAIR CRM customer permissions (`fair_crm.customers.create`, `.read`, `.update`, `.archive`) in Core RBAC tables
+- Migration tests for FAIR CRM permission seed
+
 ## [0.4.0] — 2026-07-01
 
 Sprint **0.4.0** — Platform Services (Audit Query, Settings, Background Jobs, Notifications).
