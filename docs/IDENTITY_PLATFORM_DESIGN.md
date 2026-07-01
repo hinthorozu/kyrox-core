@@ -613,13 +613,13 @@ Indexes: `user_id`, `token_hash`, `organization_id`, `(user_id, revoked_at)`.
 
 Sprint **0.3** (this document) is design only. Implementation splits into sub-sprints:
 
-| Sprint | Focus | Deliverables |
-|--------|--------|--------------|
-| **0.3.1** | Domain & persistence | `modules/identity/` scaffold; domain entities; Alembic migrations for tables in Section 16; repository ports |
-| **0.3.2** | Authentication | Login, refresh, logout, token middleware, refresh rotation |
-| **0.3.3** | Organizations & membership | CRUD, invite flow, organization context resolution |
-| **0.3.4** | RBAC | Permission catalog seed, roles, assignments, authorization middleware |
-| **0.3.5** | Hardening & integration | Super admin tooling, audit hooks, contract tests, product integration guide update |
+| Sprint | Focus | Deliverables | Status |
+|--------|--------|--------------|--------|
+| **0.3.1** | Domain & persistence | `modules/identity/` scaffold; domain entities; Alembic migrations for tables in Section 16; repository ports | Completed (v0.2.0) |
+| **0.3.2** | Authentication | Login, refresh, logout, token middleware, refresh rotation | Completed (v0.2.0) |
+| **0.3.3** | Authentication core (implementation) | Canonical auth domain/application/infrastructure/API | Completed (v0.2.0) |
+| **0.3.4** | RBAC + hardening | Permission checker, guards, super-admin policy, edge-case tests | Completed (v0.2.0) |
+| **0.3.5** | Organizations & membership | Canonical domain, application, infrastructure, migrations, API & DI | Completed (**v0.3.0**) |
 
 Each sub-sprint follows [Backend Architecture Standards](BACKEND_ARCHITECTURE_STANDARDS.md): domain → application use cases → infrastructure → API.
 

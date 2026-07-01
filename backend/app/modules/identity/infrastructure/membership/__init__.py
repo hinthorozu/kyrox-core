@@ -1,0 +1,1 @@
+"""Membership infrastructure bounded context."""
