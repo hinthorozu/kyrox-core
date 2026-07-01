@@ -18,23 +18,39 @@
 
 | Item | Status |
 |------|--------|
-| Architecture documentation | In progress (Sprint 0.1) |
-| Backend foundation | Completed (Sprint 0.2) |
+| Architecture documentation | Completed (v0.1.0) |
+| Backend foundation | Completed (v0.1.0 / Sprint 0.2) |
 | Backend architecture standards | Completed (Sprint 0.2.5) |
-| Identity platform design | In progress (Sprint 0.3) |
-| Database migrations | Not started |
-| Public API endpoints | Health check only (`GET /api/v1/health`) |
+| Data foundation (SQLAlchemy, Alembic, migrations) | Completed |
+| Identity platform (users, organizations, membership) | Completed |
+| Authentication (login, refresh, logout, JWT sessions) | Completed |
+| Authorization (roles, permissions, guards) | Completed |
+| Identity hardening (policy, edge cases, guard tests) | Completed |
+| Database migrations | Active (Alembic; identity schema through authorization hardening) |
+| Public API endpoints | Health + auth (see below) |
+| Platform Services (audit, settings, jobs, notifications) | Not started |
+| Product endpoints | Not implemented |
 
-Sprint 0.2 delivered the reusable backend foundation. Sprint 0.2.5 defined layered architecture standards. Sprint 0.3 defines the Identity Platform design before implementation.
+**Test suite:** 62 tests passing (SQLite in CI/local; no PostgreSQL required for tests).
 
-## Current Sprint
+Sprint 0.2 delivered the reusable backend foundation. Sprint 0.2.5 defined layered architecture standards. The Identity Platform (persistence, authentication, authorization, and hardening) is **completed**. The next milestone is **v0.3.0 — Platform Services**.
 
-**Sprint 0.3 — Identity Platform Design** (active)
+## Current Status
 
-In progress:
+**Identity Platform — completed**
 
-- [Identity Platform Design](docs/IDENTITY_PLATFORM_DESIGN.md) — users, organizations, membership, RBAC, auth, sessions
-- [ADR 0003: Organization as Tenant Concept](docs/DECISIONS/0003-organization-as-tenant-concept.md) — **Organization** is the platform account boundary; implementation follows design review
+Delivered:
+
+- Domain entities and repository ports for users, organizations, memberships, roles, and permissions
+- Authentication: Argon2id passwords, JWT access tokens, refresh tokens, sessions
+- Authorization: role-based permission checks with explicit organization context (`X-Organization-Id` header; no `org_id` in JWT)
+- Authorization guard foundation (`require_permission`) for protected routes — **not yet applied to product endpoints**
+- Alembic migrations for identity and auth schema
+- Architecture and integration tests
+
+**Next milestone: v0.3.0 — Platform Services**
+
+Planned: Audit, Settings, Background Jobs, Notifications.
 
 Run quality checks:
 
@@ -42,19 +58,25 @@ Run quality checks:
 python scripts/quality_check.py
 ```
 
-Implementation (models, migrations, identity APIs) begins in **Sprint 0.3.x** after design approval. Next platform sprint after identity: **Sprint 0.4 — Audit, settings, files, jobs**
+## Public API Endpoints
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/api/v1/health` | Platform health check |
+| `POST` | `/api/v1/auth/login` | Email/password login; returns access + refresh tokens |
+| `POST` | `/api/v1/auth/refresh` | Rotate refresh token; returns new token pair |
+| `POST` | `/api/v1/auth/logout` | Revoke session and refresh token |
+
+Authorization guards exist for future protected routes (Bearer JWT + `X-Organization-Id` + permission code). Product-specific API endpoints are not implemented yet.
 
 ## Roadmap (Summary)
 
-| Sprint | Focus |
-|--------|--------|
-| **0.1** | Architecture — documentation and boundaries |
-| **0.2** | Backend foundation — project structure, tooling, health checks |
-| **0.2.5** | Backend architecture standards — layer boundaries, dependency rules, testing |
-| **0.3** | Identity Platform design — organization, user, membership, RBAC, auth |
-| **0.3.x** | Identity Platform implementation — phased after design review |
-| **0.4** | Audit, settings, files, background jobs |
-| **1.0** | FAIR CRM integration preparation |
+| Milestone | Focus | Status |
+|-----------|--------|--------|
+| **v0.1.0** | Foundation — architecture, backend scaffold, data layer, health checks | Completed |
+| **v0.2.0** | Identity Platform — users, orgs, membership, auth, authorization, hardening | Completed |
+| **v0.3.0** | Platform Services — audit, settings, background jobs, notifications | Planned |
+| **v1.0.0** | FAIR CRM integration / production readiness | Later |
 
 See [docs/ROADMAP.md](docs/ROADMAP.md) for sprint details.
 
