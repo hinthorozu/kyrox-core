@@ -1,7 +1,8 @@
 import re
 from dataclasses import dataclass
 
-_PERMISSION_CODE_PATTERN = re.compile(r"^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*){2}$")
+# module.resource.action minimum; additional nested segments allowed (e.g. fair_crm.admin.backups.read).
+_PERMISSION_CODE_PATTERN = re.compile(r"^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*){2,}$")
 
 
 @dataclass(frozen=True, slots=True)

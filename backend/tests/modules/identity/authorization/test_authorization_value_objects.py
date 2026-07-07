@@ -33,9 +33,34 @@ def test_permission_code_create_normalizes_value() -> None:
     assert code.value == "core.user.read"
 
 
-def test_permission_code_create_rejects_invalid_value() -> None:
+@pytest.mark.parametrize(
+    "raw",
+    (
+        "fair_crm.customers.read",
+        "fair_crm.scraper.download",
+        "fair_crm.admin.backups.read",
+        "fair_crm.admin.data_operations.run",
+    ),
+)
+def test_permission_code_create_accepts_valid_codes(raw: str) -> None:
+    assert PermissionCode.create(raw).value == raw
+
+
+@pytest.mark.parametrize(
+    "raw",
+    (
+        "fair_crm",
+        "fair_crm.",
+        "fair_crm..read",
+        "fair_crm.admin.backups.",
+        ".fair_crm.customers.read",
+        "fair_crm.customers.read.",
+        "invalid",
+    ),
+)
+def test_permission_code_create_rejects_invalid_value(raw: str) -> None:
     with pytest.raises(ValueError, match="Invalid permission code"):
-        PermissionCode.create("invalid")
+        PermissionCode.create(raw)
 
 
 def test_permission_group_code_create_normalizes_value() -> None:

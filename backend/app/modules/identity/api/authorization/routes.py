@@ -12,7 +12,9 @@ from app.modules.identity.api.authorization.schemas import (
     ErrorResponse,
 )
 from app.modules.identity.api.membership.dependencies import assert_organization_scope
+from app.modules.identity.api.authorization.error_mapping import map_authorization_error
 from app.modules.identity.application.authorization import AuthorizationService, CheckPermissionCommand
+from app.modules.identity.domain.authorization.exceptions import InvalidPermissionError
 from app.modules.identity.domain.authorization.value_objects.identity.organization_id import (
     OrganizationId,
 )
@@ -38,11 +40,14 @@ def check_organization_permission(
     authorization_service: AuthorizationService = Depends(get_authorization_service),
 ) -> CheckPermissionResponse:
     assert_organization_scope(organization_id, context)
-    decision = authorization_service.check_permission(
-        CheckPermissionCommand(
-            user_id=UserId(context.user_id),
-            organization_id=OrganizationId(context.organization_id),
-            permission_code=body.permission_code,
+    try:
+        decision = authorization_service.check_permission(
+            CheckPermissionCommand(
+                user_id=UserId(context.user_id),
+                organization_id=OrganizationId(context.organization_id),
+                permission_code=body.permission_code,
+            )
         )
-    )
+    except InvalidPermissionError as exc:
+        raise map_authorization_error(exc) from exc
     return authorization_decision_to_response(decision)

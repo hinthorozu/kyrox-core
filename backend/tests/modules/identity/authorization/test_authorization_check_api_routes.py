@@ -5,7 +5,7 @@ from pathlib import Path
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "identity"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from identity_api_test_helpers import login, seed_user_with_org_permission
 
 
@@ -51,6 +51,72 @@ def test_check_permission_returns_allowed_false(
     body = response.json()
     assert body["allowed"] is False
     assert body["permission_code"] == "fair_crm.customers.read"
+
+
+def test_check_permission_returns_allowed_true_for_scraper_read(
+    client: TestClient,
+    db_session: Session,
+) -> None:
+    seed = seed_user_with_org_permission(db_session, permission_code="fair_crm.scraper.read")
+    token = login(client, seed.user.email)
+
+    response = client.post(
+        f"/api/v1/organizations/{seed.org.id.value}/authorization/check",
+        json={"permission_code": "fair_crm.scraper.read"},
+        headers={
+            "Authorization": f"Bearer {token}",
+            "X-Organization-Id": str(seed.org.id.value),
+        },
+    )
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["allowed"] is True
+    assert body["permission_code"] == "fair_crm.scraper.read"
+
+
+def test_check_permission_nested_admin_code_does_not_return_500(
+    client: TestClient,
+    db_session: Session,
+) -> None:
+    seed = seed_user_with_org_permission(
+        db_session,
+        permission_code="fair_crm.admin.backups.read",
+    )
+    token = login(client, seed.user.email)
+
+    response = client.post(
+        f"/api/v1/organizations/{seed.org.id.value}/authorization/check",
+        json={"permission_code": "fair_crm.admin.backups.read"},
+        headers={
+            "Authorization": f"Bearer {token}",
+            "X-Organization-Id": str(seed.org.id.value),
+        },
+    )
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["allowed"] is True
+    assert body["permission_code"] == "fair_crm.admin.backups.read"
+
+
+def test_check_permission_invalid_permission_code_returns_400(
+    client: TestClient,
+    db_session: Session,
+) -> None:
+    seed = seed_user_with_org_permission(db_session, permission_code="audit.logs.read")
+    token = login(client, seed.user.email)
+
+    response = client.post(
+        f"/api/v1/organizations/{seed.org.id.value}/authorization/check",
+        json={"permission_code": "fair_crm..read"},
+        headers={
+            "Authorization": f"Bearer {token}",
+            "X-Organization-Id": str(seed.org.id.value),
+        },
+    )
+
+    assert response.status_code == 400, response.text
 
 
 def test_check_permission_scope_mismatch_returns_400(

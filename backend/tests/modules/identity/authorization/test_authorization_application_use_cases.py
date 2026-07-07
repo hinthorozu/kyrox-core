@@ -233,6 +233,11 @@ def test_permission_policy_normalize_lowercases_code() -> None:
     assert policy.normalize(" Core.User.Read ").value == "core.user.read"
 
 
+def test_permission_policy_normalize_accepts_nested_admin_codes() -> None:
+    policy = PermissionPolicy()
+    assert policy.normalize("fair_crm.admin.backups.read").value == "fair_crm.admin.backups.read"
+
+
 def test_super_admin_policy_allows_core_prefix_only_for_active_super_admin() -> None:
     user_id = UserId(uuid.uuid4())
     policy = SuperAdminPolicy()
