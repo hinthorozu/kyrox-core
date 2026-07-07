@@ -87,7 +87,7 @@ def load_fair_crm_permission_ids(cur) -> dict[str, str]:
         """
         SELECT code, id
         FROM identity_permissions
-        WHERE code LIKE 'fair_crm.%'
+        WHERE code LIKE 'fair_crm.%%'
         ORDER BY code
         """
     )
@@ -375,11 +375,14 @@ def main() -> int:
                 SELECT COUNT(*)
                 FROM identity_role_permissions rp
                 JOIN identity_permissions p ON p.id = rp.permission_id
-                WHERE rp.role_id = %s AND p.code LIKE 'fair_crm.%'
+                WHERE rp.role_id = %s AND p.code LIKE 'fair_crm.%%'
                 """,
                 (owner_role_id,),
             )
-            final_mapped = int(cur.fetchone()[0])
+            count_row = cur.fetchone()
+            if count_row is None:
+                raise SeedError("Could not verify owner role fair_crm permission count")
+            final_mapped = int(count_row[0])
             if final_mapped < mapped:
                 raise SeedError(
                     f"Owner role mapping incomplete: {final_mapped}/{mapped} fair_crm permissions"
