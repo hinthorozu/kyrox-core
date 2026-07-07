@@ -40,6 +40,8 @@ def test_permission_code_create_normalizes_value() -> None:
         "fair_crm.scraper.download",
         "fair_crm.admin.backups.read",
         "fair_crm.admin.data_operations.run",
+        "fair_crm.dashboard.read",
+        "fair_crm.todos.outcomes.deactivate",
     ),
 )
 def test_permission_code_create_accepts_valid_codes(raw: str) -> None:

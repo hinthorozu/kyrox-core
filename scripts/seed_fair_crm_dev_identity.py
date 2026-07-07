@@ -7,7 +7,7 @@ Creates or updates:
 - dev@example.com / DevPassword123! assigned as owner
 
 Safe to run multiple times; uses ON CONFLICT / existence checks only.
-Requires Core Alembic revision >= 20260701_0029.
+Requires Core Alembic revision >= 20260701_0030.
 """
 
 from __future__ import annotations
@@ -32,7 +32,7 @@ DEV_ORG_SLUG = os.environ.get("FAIR_CRM_DEV_ORGANIZATION_SLUG", "fair-crm-dev")
 OWNER_ROLE_SLUG = os.environ.get("FAIR_CRM_DEV_ROLE_SLUG", "owner")
 OWNER_ROLE_NAME = os.environ.get("FAIR_CRM_DEV_ROLE_NAME", "Owner")
 
-MIN_CORE_MIGRATION_REVISION = os.environ.get("FAIR_CRM_MIN_CORE_MIGRATION", "20260701_0029")
+MIN_CORE_MIGRATION_REVISION = os.environ.get("FAIR_CRM_MIN_CORE_MIGRATION", "20260701_0030")
 
 CORE_DB_URL = os.environ.get(
     "KYROX_CORE_DATABASE_URL",
@@ -95,7 +95,7 @@ def load_fair_crm_permission_ids(cur) -> dict[str, str]:
     if not rows:
         raise SeedError(
             "No fair_crm.* permissions found. "
-            "Apply kyrox-core alembic migrations through 20260701_0029 first."
+            "Apply kyrox-core alembic migrations through 20260701_0030 first."
         )
     return {str(code): str(perm_id) for code, perm_id in rows}
 
