@@ -62,7 +62,7 @@ def get_id_generator() -> IdGenerator:
 
 def get_token_policy() -> TokenPolicy:
     return TokenPolicy(
-        access_token_expire_seconds=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+        access_token_expire_seconds=settings.ACCESS_TOKEN_EXPIRE_DAYS * 24 * 60 * 60,
         refresh_token_expire_days=settings.REFRESH_TOKEN_EXPIRE_DAYS,
     )
 
