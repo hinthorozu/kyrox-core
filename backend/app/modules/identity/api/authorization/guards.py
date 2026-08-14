@@ -57,19 +57,8 @@ def get_organization_id(
     return x_organization_id
 
 
-def get_authorization_context(
-    claims: AccessTokenClaims = Depends(get_access_token_claims),
-    organization_id: UUID = Depends(get_organization_id),
-) -> AuthorizationContext:
-    return AuthorizationContext(
-        user_id=claims.sub.value,
-        organization_id=organization_id,
-        email=claims.email.value,
-    )
-
-
 def is_super_admin(user_id: UUID, platform_user_reader: PlatformUserReader) -> bool:
-    """Platform-level god mode, independent of roles and permission rows."""
+    """Platform god mode. This is independent from roles, memberships and permission rows."""
     snapshot = platform_user_reader.get_snapshot(UserId(user_id))
     return bool(
         snapshot is not None
@@ -78,11 +67,24 @@ def is_super_admin(user_id: UUID, platform_user_reader: PlatformUserReader) -> b
     )
 
 
+def get_authorization_context(
+    claims: AccessTokenClaims = Depends(get_access_token_claims),
+    organization_id: UUID = Depends(get_organization_id),
+    platform_user_reader: PlatformUserReader = Depends(get_platform_user_reader),
+) -> AuthorizationContext:
+    return AuthorizationContext(
+        user_id=claims.sub.value,
+        organization_id=organization_id,
+        email=claims.email.value,
+        is_super_admin=is_super_admin(claims.sub.value, platform_user_reader),
+    )
+
+
 def require_super_admin(
     claims: AccessTokenClaims = Depends(get_access_token_claims),
     platform_user_reader: PlatformUserReader = Depends(get_platform_user_reader),
 ) -> AccessTokenClaims:
-    """Require the platform Super Admin flag; never consult RBAC permissions."""
+    """Require only the DB-backed Super Admin flag; RBAC is never consulted."""
     if not is_super_admin(claims.sub.value, platform_user_reader):
         raise AppException("Super admin required", status_code=status.HTTP_403_FORBIDDEN)
     return claims
@@ -93,10 +95,10 @@ def _assert_active_membership(
     organization_id: UUID,
     membership_repository: MembershipRepository,
     platform_user_reader: PlatformUserReader,
-) -> None:
-    # Super Admin is platform god mode and does not need organization membership.
+) -> bool:
+    # Super Admin never needs organization membership.
     if is_super_admin(claims.sub.value, platform_user_reader):
-        return
+        return True
 
     membership = membership_repository.get_by_user_and_organization(
         claims.sub,
@@ -104,6 +106,7 @@ def _assert_active_membership(
     )
     if membership is None or not membership.is_effective():
         raise AppException("Forbidden", status_code=status.HTTP_403_FORBIDDEN)
+    return False
 
 
 def require_organization_membership() -> Callable[..., AuthenticatedOrganizationContext]:
@@ -113,7 +116,7 @@ def require_organization_membership() -> Callable[..., AuthenticatedOrganization
         membership_repository: MembershipRepository = Depends(get_membership_repository),
         platform_user_reader: PlatformUserReader = Depends(get_platform_user_reader),
     ) -> AuthenticatedOrganizationContext:
-        _assert_active_membership(
+        actor_is_super_admin = _assert_active_membership(
             claims,
             organization_id,
             membership_repository,
@@ -124,6 +127,7 @@ def require_organization_membership() -> Callable[..., AuthenticatedOrganization
             organization_id=organization_id,
             email=claims.email.value,
             session_id=claims.sid.value,
+            is_super_admin=actor_is_super_admin,
         )
 
     return dependency
@@ -134,16 +138,14 @@ def require_permission(
 ) -> Callable[..., AuthorizationContext]:
     def dependency(
         context: AuthorizationContext = Depends(get_authorization_context),
-        platform_user_reader: PlatformUserReader = Depends(get_platform_user_reader),
         authorization_service: AuthorizationService = Depends(get_authorization_service),
     ) -> AuthorizationContext:
-        # Super Admin bypass MUST happen before permission normalization/lookup.
-        # Missing, removed or not-yet-seeded DB permission rows cannot block it.
-        if is_super_admin(context.user_id, platform_user_reader):
+        # Absolute platform bypass happens before permission-code normalization,
+        # permission-row lookup, roles or organization membership. Therefore a
+        # missing/deleted/not-yet-seeded permission can never block Super Admin.
+        if context.is_super_admin:
             return context
 
-        # OrganizationAdmin bypass is implemented inside the permission checker
-        # before permission-row lookup and is limited to its own organization.
         try:
             authorization_service.require_permission(
                 CheckPermissionCommand(
