@@ -81,5 +81,5 @@ def create_organization_result_to_response(
 ) -> CreateOrganizationResponse:
     return CreateOrganizationResponse(
         organization=organization_result_to_response(result.organization),
-        membership_id=result.membership_id.value,
+        membership_id=result.membership_id.value if result.membership_id is not None else None,
     )
