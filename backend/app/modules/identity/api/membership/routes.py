@@ -14,6 +14,7 @@ from app.modules.identity.api.authorization.guards import get_access_token_claim
 from app.modules.identity.api.membership.dependencies import (
     assert_organization_scope,
     get_accept_membership_invite_use_case,
+    get_create_organization_user_use_case,
     get_invite_member_use_case,
     get_invite_token_issuer,
     get_list_organization_memberships_use_case,
@@ -37,6 +38,8 @@ from app.modules.identity.api.membership.mappers import (
 from app.modules.identity.api.membership.schemas import (
     AcceptMembershipInviteRequest,
     AcceptMembershipInviteResponse,
+    CreateOrganizationUserRequest,
+    CreateOrganizationUserResponse,
     ErrorResponse,
     InviteMemberRequest,
     InviteMemberResponse,
@@ -46,6 +49,12 @@ from app.modules.identity.api.membership.schemas import (
 )
 from app.modules.identity.application.authentication.id_generator import IdGenerator
 from app.modules.identity.application.membership.accept_membership_invite import AcceptMembershipInviteUseCase
+from app.modules.identity.application.membership.create_organization_user import (
+    CreateOrganizationUserCommand,
+    CreateOrganizationUserUseCase,
+    OrganizationNotFoundForUserCreationError,
+    UserAlreadyExistsError,
+)
 from app.modules.identity.application.membership.invite_member import InviteMemberUseCase
 from app.modules.identity.application.membership.invite_token_issuer import InviteTokenIssuer
 from app.modules.identity.application.membership.list_organization_memberships import (
@@ -89,6 +98,47 @@ def list_organization_memberships(
     except OrganizationError as exc:
         raise map_membership_flow_error(exc) from exc
     return membership_list_result_to_response(result)
+
+
+@router.post(
+    "/organizations/{organization_id}/users",
+    response_model=CreateOrganizationUserResponse,
+    status_code=status.HTTP_201_CREATED,
+    responses={
+        400: {"model": ErrorResponse},
+        403: {"model": ErrorResponse},
+        404: {"model": ErrorResponse},
+        409: {"model": ErrorResponse},
+    },
+)
+def create_organization_user(
+    organization_id: UUID,
+    payload: CreateOrganizationUserRequest,
+    context: AuthorizationContext = Depends(require_permission("identity.users.create")),
+    use_case: CreateOrganizationUserUseCase = Depends(get_create_organization_user_use_case),
+) -> CreateOrganizationUserResponse:
+    assert_organization_scope(organization_id, context)
+    try:
+        result = use_case.execute(
+            CreateOrganizationUserCommand(
+                organization_id=OrganizationId(organization_id),
+                created_by_user_id=UserId(context.user_id),
+                email=str(payload.email),
+                temporary_password=payload.temporary_password,
+                role_slug=payload.role_slug,
+            )
+        )
+    except OrganizationNotFoundForUserCreationError as exc:
+        raise AppException(str(exc), status_code=status.HTTP_404_NOT_FOUND) from exc
+    except UserAlreadyExistsError as exc:
+        raise AppException(str(exc), status_code=status.HTTP_409_CONFLICT) from exc
+
+    return CreateOrganizationUserResponse(
+        user_id=result.user_id.value,
+        email=result.email,
+        must_change_password=result.must_change_password,
+        membership=membership_result_to_response(result.membership),
+    )
 
 
 @router.post(
