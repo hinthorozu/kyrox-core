@@ -47,13 +47,15 @@ class CreateOrganizationUseCase:
         owner.assert_can_authenticate()
 
         name = self._naming_policy.normalize_name(command.name)
-        slug = self._naming_policy.normalize_slug(command.slug)
+        organization_id = OrganizationId(self._id_generator.generate_uuid())
+        raw_slug = command.slug or f"org-{organization_id.value.hex[:12]}"
+        slug = self._naming_policy.normalize_slug(raw_slug)
         if self._organization_repository.exists_by_slug(slug):
             raise DuplicateOrganizationSlugError(f"Organization slug already exists: {slug.value}")
 
         now = self._clock.now()
         organization = Organization(
-            id=OrganizationId(self._id_generator.generate_uuid()),
+            id=organization_id,
             name=name,
             slug=slug,
             status=OrganizationStatus.ACTIVE,
