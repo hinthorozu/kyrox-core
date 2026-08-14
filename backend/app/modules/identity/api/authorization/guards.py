@@ -77,6 +77,16 @@ def get_password_change_complete_claims(
     return claims
 
 
+def require_super_admin(
+    claims: AccessTokenClaims = Depends(get_password_change_complete_claims),
+    platform_user_reader: PlatformUserReader = Depends(get_platform_user_reader),
+) -> AccessTokenClaims:
+    snapshot = platform_user_reader.get_snapshot(claims.sub)
+    if snapshot is None or not snapshot.can_be_authorized() or not snapshot.is_super_admin:
+        raise AppException("Forbidden", status_code=status.HTTP_403_FORBIDDEN)
+    return claims
+
+
 def get_authorization_context(
     claims: AccessTokenClaims = Depends(get_password_change_complete_claims),
     organization_id: UUID = Depends(get_organization_id),
