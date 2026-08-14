@@ -200,7 +200,10 @@ def require_scoped_membership(permission_code: str) -> Callable[..., MembershipI
         membership_repository: MembershipRepository = Depends(get_membership_repository),
     ) -> MembershipId:
         membership = membership_repository.get_by_id(MembershipId(membership_id))
-        if membership is None or membership.organization_id.value != context.organization_id:
+        if membership is None or (
+            not context.is_super_admin
+            and membership.organization_id.value != context.organization_id
+        ):
             raise map_membership_error(
                 MembershipNotFoundError(f"Membership not found: {membership_id}")
             )
@@ -213,5 +216,8 @@ def assert_organization_scope(
     path_organization_id: UUID,
     context: AuthorizationContext | AuthenticatedOrganizationContext,
 ) -> None:
+    # Super Admin is platform-wide and is never bound to X-Organization-Id.
+    if context.is_super_admin:
+        return
     if path_organization_id != context.organization_id:
         raise AppException("Organization scope mismatch", status_code=400)
