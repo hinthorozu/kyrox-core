@@ -68,14 +68,20 @@ def get_authorization_context(
     )
 
 
+def _is_super_admin(user_id: UUID, platform_user_reader: PlatformUserReader) -> bool:
+    snapshot = platform_user_reader.get_snapshot(UserId(user_id))
+    return bool(snapshot is not None and snapshot.is_super_admin)
+
+
 def _assert_active_membership(
     claims: AccessTokenClaims,
     organization_id: UUID,
     membership_repository: MembershipRepository,
     platform_user_reader: PlatformUserReader,
 ) -> None:
-    snapshot = platform_user_reader.get_snapshot(claims.sub)
-    if snapshot is not None and snapshot.is_super_admin:
+    # Super Admin is a platform-level god-mode flag. It is intentionally
+    # independent from memberships, roles and permission rows.
+    if _is_super_admin(claims.sub.value, platform_user_reader):
         return
 
     membership = membership_repository.get_by_user_and_organization(
@@ -114,8 +120,16 @@ def require_permission(
 ) -> Callable[..., AuthorizationContext]:
     def dependency(
         context: AuthorizationContext = Depends(get_authorization_context),
+        platform_user_reader: PlatformUserReader = Depends(get_platform_user_reader),
         authorization_service: AuthorizationService = Depends(get_authorization_service),
     ) -> AuthorizationContext:
+        # IMPORTANT: Super Admin bypass happens BEFORE permission lookup.
+        # Therefore a brand-new module/endpoint may reference a permission code
+        # that has not yet been seeded into identity_permissions and Super Admin
+        # still receives access. Normal users continue through RBAC as usual.
+        if _is_super_admin(context.user_id, platform_user_reader):
+            return context
+
         try:
             authorization_service.require_permission(
                 CheckPermissionCommand(
