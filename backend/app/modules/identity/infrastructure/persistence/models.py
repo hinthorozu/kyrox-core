@@ -11,6 +11,7 @@ class UserModel(BaseModelMixin, Base):
     password_hash: Mapped[str | None] = mapped_column(String, nullable=True)
     status: Mapped[str] = mapped_column(String(32), nullable=False)
     is_super_admin: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    must_change_password: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
 
 
 from app.modules.identity.infrastructure.authentication.persistence.models.refresh_token import (
