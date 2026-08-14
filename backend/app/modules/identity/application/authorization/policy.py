@@ -21,8 +21,6 @@ class PermissionPolicy:
 
 @dataclass(frozen=True, slots=True)
 class SuperAdminPolicy:
-    core_permission_prefix: str = "core."
-
     def allows(
         self,
         snapshot: PlatformUserSnapshot,
@@ -30,6 +28,4 @@ class SuperAdminPolicy:
     ) -> bool:
         if not snapshot.can_be_authorized():
             return False
-        if not snapshot.is_super_admin:
-            return False
-        return permission_code.value.startswith(self.core_permission_prefix)
+        return snapshot.is_super_admin
