@@ -64,7 +64,7 @@ def upgrade() -> None:
             ),
             {
                 "id": str(uuid.uuid4()),
-                "group_id": group_id,
+                "group_id": str(group_id),
                 "code": code,
                 "description": description,
                 "is_system": True,
@@ -75,6 +75,17 @@ def upgrade() -> None:
 def downgrade() -> None:
     connection = op.get_bind()
     for code, _ in PERMISSIONS:
+        connection.execute(
+            sa.text(
+                """
+                DELETE FROM identity_role_permissions
+                WHERE permission_id = (
+                    SELECT id FROM identity_permissions WHERE code = :code
+                )
+                """
+            ),
+            {"code": code},
+        )
         connection.execute(
             sa.text("DELETE FROM identity_permissions WHERE code = :code"),
             {"code": code},
