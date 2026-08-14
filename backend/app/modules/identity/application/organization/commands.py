@@ -8,7 +8,12 @@ from app.modules.identity.domain.organization.value_objects.identity.organizatio
 class CreateOrganizationCommand:
     owner_user_id: UserId
     name: str
-    slug: str
+    slug: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class ListOrganizationsCommand:
+    user_id: UserId
 
 
 @dataclass(frozen=True, slots=True)
@@ -20,6 +25,11 @@ class GetOrganizationCommand:
 class UpdateOrganizationCommand:
     organization_id: OrganizationId
     name: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class DeleteOrganizationCommand:
+    organization_id: OrganizationId
 
 
 @dataclass(frozen=True, slots=True)
