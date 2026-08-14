@@ -26,6 +26,4 @@ class SuperAdminPolicy:
         snapshot: PlatformUserSnapshot,
         permission_code: PermissionCode,
     ) -> bool:
-        if not snapshot.can_be_authorized():
-            return False
         return snapshot.is_super_admin
