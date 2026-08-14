@@ -3,7 +3,13 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, Response, status
 
 from app.modules.identity.api.authorization.context import AuthorizationContext
-from app.modules.identity.api.authorization.guards import get_access_token_claims, require_permission
+from app.modules.identity.api.authorization.dependencies import get_platform_user_reader
+from app.modules.identity.api.authorization.guards import (
+    get_access_token_claims,
+    is_super_admin,
+    require_permission,
+    require_super_admin,
+)
 from app.modules.identity.api.membership.dependencies import assert_organization_scope
 from app.modules.identity.api.organization.dependencies import (
     get_create_organization_use_case,
@@ -43,6 +49,7 @@ from app.modules.identity.application.organization.suspend_organization import S
 from app.modules.identity.application.organization.update_organization import UpdateOrganizationUseCase
 from app.modules.identity.domain.authentication.value_objects.security.access_token import AccessTokenClaims
 from app.modules.identity.domain.authentication.value_objects.identity.user_id import UserId
+from app.modules.identity.domain.authorization.ports.platform_user_reader import PlatformUserReader
 from app.modules.identity.domain.organization.exceptions import OrganizationError
 from app.modules.identity.domain.organization.value_objects.identity.organization_id import OrganizationId
 
@@ -62,9 +69,11 @@ router = APIRouter(prefix="/organizations", tags=["organizations"])
 )
 def create_organization(
     payload: CreateOrganizationRequest,
-    claims: AccessTokenClaims = Depends(get_access_token_claims),
+    claims: AccessTokenClaims = Depends(require_super_admin),
     use_case: CreateOrganizationUseCase = Depends(get_create_organization_use_case),
 ) -> CreateOrganizationResponse:
+    # Platform organization creation is Super Admin only and does not depend
+    # on any permission row or organization membership.
     try:
         result = use_case.execute(
             create_organization_request_to_command(payload, UserId(claims.sub.value))
@@ -82,9 +91,17 @@ def create_organization(
 )
 def list_organizations(
     claims: AccessTokenClaims = Depends(get_access_token_claims),
+    platform_user_reader: PlatformUserReader = Depends(get_platform_user_reader),
     use_case: ListOrganizationsUseCase = Depends(get_list_organizations_use_case),
 ) -> list[OrganizationResponse]:
-    results = use_case.execute(list_organizations_command(UserId(claims.sub.value)))
+    # Super Admin sees every non-deleted organization. Other users see only
+    # organizations where they have an effective membership.
+    results = use_case.execute(
+        list_organizations_command(
+            UserId(claims.sub.value),
+            include_all=is_super_admin(claims.sub.value, platform_user_reader),
+        )
+    )
     return organization_results_to_response(results)
 
 
