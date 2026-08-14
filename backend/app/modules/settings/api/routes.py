@@ -3,8 +3,9 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, Query, Response, status
 
 from app.modules.identity.api.authorization.context import AuthorizationContext
-from app.modules.identity.api.authorization.guards import require_permission
+from app.modules.identity.api.authorization.guards import require_permission, require_super_admin
 from app.modules.identity.api.membership.dependencies import assert_organization_scope
+from app.modules.identity.domain.authentication.value_objects.security.access_token import AccessTokenClaims
 from app.modules.settings.api.dependencies import (
     get_delete_setting_use_case,
     get_get_setting_use_case,
@@ -12,7 +13,6 @@ from app.modules.settings.api.dependencies import (
     get_upsert_setting_use_case,
 )
 from app.modules.settings.api.error_mapping import map_setting_error
-from app.modules.settings.api.guards import SuperAdminContext, require_super_admin
 from app.modules.settings.api.mappers import (
     org_delete_command,
     org_get_command,
@@ -147,7 +147,7 @@ def delete_organization_setting(
 )
 def list_system_settings(
     key_prefix: str | None = Query(default=None),
-    _context: SuperAdminContext = Depends(require_super_admin),
+    _claims: AccessTokenClaims = Depends(require_super_admin),
     use_case: ListSettingsUseCase = Depends(get_list_settings_use_case),
 ) -> SettingListResponse:
     result = _handle_setting_errors(lambda: use_case.execute(system_list_command(key_prefix)))
@@ -166,7 +166,7 @@ def list_system_settings(
 )
 def get_system_setting(
     setting_key: str,
-    _context: SuperAdminContext = Depends(require_super_admin),
+    _claims: AccessTokenClaims = Depends(require_super_admin),
     use_case: GetSettingUseCase = Depends(get_get_setting_use_case),
 ) -> SettingResponse:
     result = _handle_setting_errors(lambda: use_case.execute(system_get_command(setting_key)))
@@ -185,7 +185,7 @@ def get_system_setting(
 def upsert_system_setting(
     setting_key: str,
     body: SettingUpsertRequest,
-    _context: SuperAdminContext = Depends(require_super_admin),
+    _claims: AccessTokenClaims = Depends(require_super_admin),
     use_case: UpsertSettingUseCase = Depends(get_upsert_setting_use_case),
 ) -> SettingResponse:
     result = _handle_setting_errors(
@@ -206,7 +206,7 @@ def upsert_system_setting(
 )
 def delete_system_setting(
     setting_key: str,
-    _context: SuperAdminContext = Depends(require_super_admin),
+    _claims: AccessTokenClaims = Depends(require_super_admin),
     use_case: DeleteSettingUseCase = Depends(get_delete_setting_use_case),
 ) -> Response:
     _handle_setting_errors(lambda: use_case.execute(system_delete_command(setting_key)))
