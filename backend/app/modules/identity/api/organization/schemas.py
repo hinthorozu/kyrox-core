@@ -26,7 +26,7 @@ class OrganizationResponse(BaseModel):
 
 class CreateOrganizationResponse(BaseModel):
     organization: OrganizationResponse
-    membership_id: UUID
+    membership_id: UUID | None = None
 
 
 class ErrorResponse(BaseModel):
