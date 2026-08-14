@@ -4,7 +4,10 @@ from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy import select
 from sqlalchemy.orm import Session
+
+from app.modules.identity.infrastructure.persistence.models import MembershipModel, UserModel
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from identity_api_test_helpers import (
@@ -28,6 +31,44 @@ def test_list_organization_memberships(client: TestClient, db_session: Session) 
 
     assert response.status_code == 200, response.text
     assert isinstance(response.json()["memberships"], list)
+
+
+def test_create_organization_user_with_temporary_password(
+    client: TestClient,
+    db_session: Session,
+) -> None:
+    seed = seed_user_with_org_permission(db_session, permission_code="identity.users.create")
+    token = login(client, seed.user.email)
+
+    response = client.post(
+        f"/api/v1/organizations/{seed.org.id.value}/users",
+        headers={
+            "Authorization": f"Bearer {token}",
+            "X-Organization-Id": str(seed.org.id.value),
+        },
+        json={
+            "email": "temporary-user@example.com",
+            "temporary_password": "Temporary123!",
+        },
+    )
+
+    assert response.status_code == 201, response.text
+    body = response.json()
+    assert body["email"] == "temporary-user@example.com"
+    assert body["must_change_password"] is True
+    assert body["membership"]["status"] == "active"
+
+    user = db_session.scalars(
+        select(UserModel).where(UserModel.email == "temporary-user@example.com")
+    ).one()
+    assert user.must_change_password is True
+    membership = db_session.scalars(
+        select(MembershipModel).where(
+            MembershipModel.user_id == user.id,
+            MembershipModel.organization_id == seed.org.id.value,
+        )
+    ).one()
+    assert membership.status == "active"
 
 
 def test_invite_member_returns_token(client: TestClient, db_session: Session) -> None:
