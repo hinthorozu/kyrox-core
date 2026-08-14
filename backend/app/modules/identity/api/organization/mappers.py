@@ -31,8 +31,12 @@ def create_organization_request_to_command(
     )
 
 
-def list_organizations_command(user_id: UserId) -> ListOrganizationsCommand:
-    return ListOrganizationsCommand(user_id=user_id)
+def list_organizations_command(
+    user_id: UserId,
+    *,
+    include_all: bool = False,
+) -> ListOrganizationsCommand:
+    return ListOrganizationsCommand(user_id=user_id, include_all=include_all)
 
 
 def get_organization_command(organization_id: OrganizationId) -> GetOrganizationCommand:
