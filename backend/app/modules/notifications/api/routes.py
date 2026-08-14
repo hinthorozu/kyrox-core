@@ -91,6 +91,11 @@ def get_notification_status(
     use_case: GetNotificationUseCase = Depends(get_get_notification_use_case),
 ) -> NotificationResponse:
     result = _handle_notification_errors(
-        lambda: use_case.execute(get_notification_command(notification_id, context.organization_id))
+        lambda: use_case.execute(
+            get_notification_command(
+                notification_id,
+                None if context.is_super_admin else context.organization_id,
+            )
+        )
     )
     return get_result_to_response(result)
