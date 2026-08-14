@@ -3,11 +3,11 @@
 
 Creates or updates:
 - Organization 00000000-0000-4000-8000-000000000010
-- Owner role template with every fair_crm.* permission in the catalog
+- Owner role template with Fair CRM and organization-management permissions
 - dev@example.com / DevPassword123! assigned as owner
 
 Safe to run multiple times; uses ON CONFLICT / existence checks only.
-Requires Core Alembic revision >= 20260701_0030.
+Requires Core Alembic revision >= 20260814_0037.
 """
 
 from __future__ import annotations
@@ -32,7 +32,12 @@ DEV_ORG_SLUG = os.environ.get("FAIR_CRM_DEV_ORGANIZATION_SLUG", "fair-crm-dev")
 OWNER_ROLE_SLUG = os.environ.get("FAIR_CRM_DEV_ROLE_SLUG", "owner")
 OWNER_ROLE_NAME = os.environ.get("FAIR_CRM_DEV_ROLE_NAME", "Owner")
 
-MIN_CORE_MIGRATION_REVISION = os.environ.get("FAIR_CRM_MIN_CORE_MIGRATION", "20260701_0030")
+MIN_CORE_MIGRATION_REVISION = os.environ.get("FAIR_CRM_MIN_CORE_MIGRATION", "20260814_0037")
+ORGANIZATION_PERMISSION_CODES = (
+    "identity.organizations.read",
+    "identity.organizations.update",
+    "identity.organizations.delete",
+)
 
 CORE_DB_URL = os.environ.get(
     "KYROX_CORE_DATABASE_URL",
@@ -82,22 +87,25 @@ def assert_core_migration_ready(cur) -> str:
     return current
 
 
-def load_fair_crm_permission_ids(cur) -> dict[str, str]:
+def load_owner_permission_ids(cur) -> dict[str, str]:
     cur.execute(
         """
         SELECT code, id
         FROM identity_permissions
         WHERE code LIKE 'fair_crm.%%'
+           OR code = ANY(%s)
         ORDER BY code
-        """
+        """,
+        (list(ORGANIZATION_PERMISSION_CODES),),
     )
     rows = cur.fetchall()
-    if not rows:
-        raise SeedError(
-            "No fair_crm.* permissions found. "
-            "Apply kyrox-core alembic migrations through 20260701_0030 first."
-        )
-    return {str(code): str(perm_id) for code, perm_id in rows}
+    permission_ids = {str(code): str(perm_id) for code, perm_id in rows}
+    missing = [code for code in ORGANIZATION_PERMISSION_CODES if code not in permission_ids]
+    if missing:
+        raise SeedError(f"Missing organization permissions: {', '.join(missing)}")
+    if not any(code.startswith("fair_crm.") for code in permission_ids):
+        raise SeedError("No fair_crm.* permissions found. Apply kyrox-core alembic migrations first.")
+    return permission_ids
 
 
 def ensure_owner_role_template(cur) -> str:
@@ -129,7 +137,7 @@ def ensure_owner_role_template(cur) -> str:
     return role_id
 
 
-def grant_fair_crm_permissions(cur, role_id: str, permission_ids: dict[str, str]) -> int:
+def grant_owner_permissions(cur, role_id: str, permission_ids: dict[str, str]) -> int:
     granted = 0
     for code in sorted(permission_ids):
         cur.execute(
@@ -354,9 +362,9 @@ def main() -> int:
     try:
         with conn.cursor() as cur:
             assert_core_migration_ready(cur)
-            permission_ids = load_fair_crm_permission_ids(cur)
+            permission_ids = load_owner_permission_ids(cur)
             owner_role_id = ensure_owner_role_template(cur)
-            mapped = grant_fair_crm_permissions(cur, owner_role_id, permission_ids)
+            mapped = grant_owner_permissions(cur, owner_role_id, permission_ids)
             verify_no_duplicate_role_permissions(cur, owner_role_id)
 
             org_id = ensure_dev_organization(cur)
@@ -374,19 +382,17 @@ def main() -> int:
                 """
                 SELECT COUNT(*)
                 FROM identity_role_permissions rp
-                JOIN identity_permissions p ON p.id = rp.permission_id
-                WHERE rp.role_id = %s AND p.code LIKE 'fair_crm.%%'
+                WHERE rp.role_id = %s
+                  AND rp.permission_id = ANY(%s)
                 """,
-                (owner_role_id,),
+                (owner_role_id, list(permission_ids.values())),
             )
             count_row = cur.fetchone()
             if count_row is None:
-                raise SeedError("Could not verify owner role fair_crm permission count")
+                raise SeedError("Could not verify owner role permission count")
             final_mapped = int(count_row[0])
             if final_mapped < mapped:
-                raise SeedError(
-                    f"Owner role mapping incomplete: {final_mapped}/{mapped} fair_crm permissions"
-                )
+                raise SeedError(f"Owner role mapping incomplete: {final_mapped}/{mapped} permissions")
 
         conn.commit()
         print(
