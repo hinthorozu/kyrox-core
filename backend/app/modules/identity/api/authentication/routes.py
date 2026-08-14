@@ -1,9 +1,12 @@
 from fastapi import APIRouter, Depends, Request, Response, status
 
 from app.modules.identity.api.authentication.dependencies import (
+    get_clock,
     get_login_use_case,
     get_logout_use_case,
+    get_password_hasher,
     get_refresh_session_use_case,
+    get_user_repository,
 )
 from app.modules.identity.api.authentication.error_mapping import map_authentication_error
 from app.modules.identity.api.authentication.mappers import (
@@ -13,16 +16,23 @@ from app.modules.identity.api.authentication.mappers import (
     result_to_token_response,
 )
 from app.modules.identity.api.authentication.schemas import (
+    ChangePasswordRequest,
     ErrorResponse,
     LoginRequest,
     LogoutRequest,
     RefreshRequest,
     TokenResponse,
 )
+from app.modules.identity.api.authorization.guards import get_access_token_claims
 from app.modules.identity.application.authentication.login import LoginUseCase
 from app.modules.identity.application.authentication.logout import LogoutUseCase
 from app.modules.identity.application.authentication.refresh_session import RefreshSessionUseCase
-from app.modules.identity.domain.authentication.exceptions import AuthenticationError
+from app.modules.identity.domain.authentication.exceptions import AuthenticationError, InvalidCredentialsError
+from app.modules.identity.domain.authentication.ports.clock import Clock
+from app.modules.identity.domain.authentication.ports.password_hasher import PasswordHasher
+from app.modules.identity.domain.authentication.ports.user_repository import UserRepository
+from app.modules.identity.domain.authentication.value_objects.identity.user_id import UserId
+from app.modules.identity.domain.authentication.value_objects.security.access_token import AccessTokenClaims
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -75,4 +85,33 @@ def logout(
     use_case: LogoutUseCase = Depends(get_logout_use_case),
 ) -> Response:
     use_case.execute(logout_request_to_command(payload))
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.post(
+    "/change-password",
+    status_code=status.HTTP_204_NO_CONTENT,
+    responses={
+        204: {"description": "Password changed successfully"},
+        401: {"model": ErrorResponse},
+    },
+)
+def change_password(
+    payload: ChangePasswordRequest,
+    claims: AccessTokenClaims = Depends(get_access_token_claims),
+    user_repository: UserRepository = Depends(get_user_repository),
+    password_hasher: PasswordHasher = Depends(get_password_hasher),
+    clock: Clock = Depends(get_clock),
+) -> Response:
+    user = user_repository.get_by_id(UserId(claims.sub.value))
+    if user is None or user.password_hash is None:
+        raise map_authentication_error(InvalidCredentialsError("Invalid credentials"))
+
+    if not password_hasher.verify(payload.current_password, user.password_hash):
+        raise map_authentication_error(InvalidCredentialsError("Invalid credentials"))
+
+    user.password_hash = password_hasher.hash(payload.new_password)
+    user.must_change_password = False
+    user.updated_at = clock.now()
+    user_repository.update(user)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
