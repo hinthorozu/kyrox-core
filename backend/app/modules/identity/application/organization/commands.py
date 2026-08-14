@@ -14,6 +14,7 @@ class CreateOrganizationCommand:
 @dataclass(frozen=True, slots=True)
 class ListOrganizationsCommand:
     user_id: UserId
+    include_all: bool = False
 
 
 @dataclass(frozen=True, slots=True)
