@@ -20,6 +20,11 @@ class AcceptMembershipInviteRequest(BaseModel):
     token: str = Field(min_length=1)
 
 
+class RegisterMembershipInviteRequest(BaseModel):
+    token: str = Field(min_length=1)
+    password: str = Field(min_length=8)
+
+
 class MembershipResponse(BaseModel):
     id: UUID
     user_id: UUID
