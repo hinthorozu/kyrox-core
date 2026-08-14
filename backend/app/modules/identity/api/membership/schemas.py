@@ -25,6 +25,12 @@ class RegisterMembershipInviteRequest(BaseModel):
     password: str = Field(min_length=8)
 
 
+class CreateOrganizationUserRequest(BaseModel):
+    email: EmailStr
+    temporary_password: str = Field(min_length=8)
+    role_slug: str | None = Field(default=None, min_length=1)
+
+
 class MembershipResponse(BaseModel):
     id: UUID
     user_id: UUID
@@ -40,6 +46,13 @@ class MembershipListResponse(BaseModel):
 class AcceptMembershipInviteResponse(BaseModel):
     membership: MembershipResponse
     organization_id: UUID
+
+
+class CreateOrganizationUserResponse(BaseModel):
+    user_id: UUID
+    email: EmailStr
+    must_change_password: bool
+    membership: MembershipResponse
 
 
 class ErrorResponse(BaseModel):
