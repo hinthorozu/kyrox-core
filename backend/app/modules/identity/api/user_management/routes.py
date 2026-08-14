@@ -2,7 +2,7 @@ from datetime import UTC, datetime
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Response, status
-from sqlalchemy import func, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.core.exceptions import AppException
@@ -62,24 +62,48 @@ def _resolve_role(
     organization_id: UUID,
     role_id: UUID,
 ) -> tuple[RoleModel, OrganizationRoleModel]:
-    stmt = (
-        select(RoleModel, OrganizationRoleModel)
-        .join(OrganizationRoleModel, OrganizationRoleModel.role_id == RoleModel.id)
-        .where(
-            RoleModel.id == role_id,
-            RoleModel.deleted_at.is_(None),
-            OrganizationRoleModel.organization_id == organization_id,
-            OrganizationRoleModel.deleted_at.is_(None),
-            OrganizationRoleModel.status == "active",
-        )
-    )
-    row = db.execute(stmt).first()
-    if row is None:
+    role = db.get(RoleModel, role_id)
+    if role is None or role.deleted_at is not None or role.scope != "organization":
         raise AppException(
             "Role is not available for this organization",
             status_code=status.HTTP_400_BAD_REQUEST,
         )
-    return row[0], row[1]
+
+    organization_role = db.scalars(
+        select(OrganizationRoleModel).where(
+            OrganizationRoleModel.organization_id == organization_id,
+            OrganizationRoleModel.role_id == role_id,
+            OrganizationRoleModel.deleted_at.is_(None),
+            OrganizationRoleModel.status == "active",
+        )
+    ).first()
+    if organization_role is not None:
+        return role, organization_role
+
+    # System roles are global defaults managed by Super Admin. They are
+    # assignable in every organization and must never depend on per-organization
+    # provisioning. Keep the existing organization-role row only as the current
+    # persistence link required by identity_user_roles.
+    if role.is_system:
+        now = _now()
+        organization_role = OrganizationRoleModel(
+            organization_id=organization_id,
+            role_id=role.id,
+            status="active",
+            is_default=True,
+            created_at=now,
+            updated_at=now,
+            deleted_at=None,
+        )
+        db.add(organization_role)
+        db.flush()
+        return role, organization_role
+
+    # Custom roles belong to the organization that created/bound them.
+    raise AppException(
+        "Role is not available for this organization",
+        status_code=status.HTTP_400_BAD_REQUEST,
+    )
 
 
 def _active_role_for_user(
@@ -239,13 +263,24 @@ def list_assignable_roles(
     assert_organization_scope(organization_id, context)
     stmt = (
         select(RoleModel)
-        .join(OrganizationRoleModel, OrganizationRoleModel.role_id == RoleModel.id)
-        .where(
-            OrganizationRoleModel.organization_id == organization_id,
-            OrganizationRoleModel.status == "active",
-            OrganizationRoleModel.deleted_at.is_(None),
-            RoleModel.deleted_at.is_(None),
+        .outerjoin(
+            OrganizationRoleModel,
+            and_(
+                OrganizationRoleModel.role_id == RoleModel.id,
+                OrganizationRoleModel.organization_id == organization_id,
+                OrganizationRoleModel.status == "active",
+                OrganizationRoleModel.deleted_at.is_(None),
+            ),
         )
+        .where(
+            RoleModel.deleted_at.is_(None),
+            RoleModel.scope == "organization",
+            or_(
+                RoleModel.is_system.is_(True),
+                OrganizationRoleModel.id.is_not(None),
+            ),
+        )
+        .distinct()
         .order_by(RoleModel.name.asc())
     )
     return [
