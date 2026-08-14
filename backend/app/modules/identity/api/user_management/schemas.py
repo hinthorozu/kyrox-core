@@ -28,6 +28,17 @@ class AssignableRoleResponse(BaseModel):
     slug: str
 
 
+class ManagedOrganizationResponse(BaseModel):
+    id: UUID
+    name: str
+    slug: str
+
+
+class UserManagementContextResponse(BaseModel):
+    is_super_admin: bool
+    organizations: list[ManagedOrganizationResponse]
+
+
 class ManagedUserResponse(BaseModel):
     id: UUID
     email: str
