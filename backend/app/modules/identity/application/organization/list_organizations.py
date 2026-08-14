@@ -15,6 +15,12 @@ class ListOrganizationsUseCase:
         self._membership_repository = membership_repository
 
     def execute(self, command: ListOrganizationsCommand) -> list[OrganizationResult]:
+        if command.include_all:
+            return [
+                to_organization_result(organization)
+                for organization in self._organization_repository.list_all()
+            ]
+
         memberships = self._membership_repository.list_by_user_id(command.user_id)
         results: list[OrganizationResult] = []
         seen: set[object] = set()
