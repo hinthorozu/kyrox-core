@@ -27,7 +27,7 @@ def send_request_to_command(
 
 def get_notification_command(
     notification_id: UUID,
-    organization_id: UUID,
+    organization_id: UUID | None,
 ) -> GetNotificationCommand:
     return GetNotificationCommand(
         notification_id=notification_id,
