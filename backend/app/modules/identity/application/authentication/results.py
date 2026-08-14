@@ -12,3 +12,4 @@ class AuthTokenPairResult:
     refresh_token: RefreshTokenValue
     token_type: str
     expires_in: int
+    must_change_password: bool = False
