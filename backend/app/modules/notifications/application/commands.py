@@ -18,7 +18,7 @@ class SendNotificationCommand:
 @dataclass(frozen=True, slots=True)
 class GetNotificationCommand:
     notification_id: UUID
-    organization_id: UUID
+    organization_id: UUID | None
 
 
 @dataclass(frozen=True, slots=True)
