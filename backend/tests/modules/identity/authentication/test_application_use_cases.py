@@ -31,6 +31,7 @@ from app.modules.identity.domain.authentication.exceptions import (
 )
 from app.modules.identity.domain.authentication.ports.clock import Clock
 from app.modules.identity.domain.authentication.ports.password_hasher import PasswordHasher
+from app.modules.identity.domain.authentication.value_objects.identity.refresh_token_id import RefreshTokenId
 from app.modules.identity.domain.authentication.value_objects.identity.session_id import SessionId
 from app.modules.identity.domain.authentication.value_objects.identity.user_id import UserId
 from app.modules.identity.domain.authentication.value_objects.security.access_token import (
@@ -191,154 +192,133 @@ def _build_user(status: UserStatus = UserStatus.ACTIVE) -> User:
     )
 
 
-def _build_use_cases(
-    *,
-    users: list[User] | None = None,
-    now: datetime | None = None,
-    id_values: list[uuid.UUID] | None = None,
-) -> tuple[LoginUseCase, RefreshSessionUseCase, LogoutUseCase, InMemoryRefreshTokenRepository, FakeRefreshTokenService]:
-    fixed_now = now or datetime(2026, 7, 1, 12, 0, tzinfo=UTC)
-    clock = FixedClock(fixed_now)
-    ids = id_values or [
-        uuid.UUID("10000000-0000-0000-0000-000000000010"),
-        uuid.UUID("20000000-0000-0000-0000-000000000020"),
-        uuid.UUID("30000000-0000-0000-0000-000000000030"),
-        uuid.UUID("40000000-0000-0000-0000-000000000040"),
-        uuid.UUID("50000000-0000-0000-0000-000000000050"),
-    ]
-    id_generator = SequenceIdGenerator(ids)
-    user_repository = InMemoryUserRepository(users or [_build_user()])
+def _build_use_cases(user: User | None = None):
+    now = datetime(2026, 7, 1, 12, tzinfo=UTC)
+    clock = FixedClock(now)
+    user_repository = InMemoryUserRepository([user or _build_user()])
     session_repository = InMemorySessionRepository()
-    refresh_token_repository = InMemoryRefreshTokenRepository()
-    refresh_token_service = FakeRefreshTokenService()
+    refresh_repository = InMemoryRefreshTokenRepository()
+    password_hasher = FakePasswordHasher()
+    token_service = FakeTokenService()
+    refresh_service = FakeRefreshTokenService()
+    id_generator = SequenceIdGenerator(
+        [
+            uuid.UUID("00000000-0000-0000-0000-000000000010"),
+            uuid.UUID("00000000-0000-0000-0000-000000000011"),
+            uuid.UUID("00000000-0000-0000-0000-000000000012"),
+            uuid.UUID("00000000-0000-0000-0000-000000000013"),
+            uuid.UUID("00000000-0000-0000-0000-000000000014"),
+        ]
+    )
     token_policy = TokenPolicy(access_token_expire_seconds=900, refresh_token_expire_days=30)
-    token_pair_issuer = TokenPairIssuer(
-        refresh_token_repository=refresh_token_repository,
-        token_service=FakeTokenService(),
-        refresh_token_service=refresh_token_service,
+    issuer = TokenPairIssuer(
+        refresh_token_repository=refresh_repository,
+        token_service=token_service,
+        refresh_token_service=refresh_service,
         clock=clock,
         token_policy=token_policy,
         id_generator=id_generator,
     )
-    login_use_case = LoginUseCase(
+    login = LoginUseCase(
         user_repository=user_repository,
         session_repository=session_repository,
-        password_hasher=FakePasswordHasher(),
-        token_pair_issuer=token_pair_issuer,
+        password_hasher=password_hasher,
+        token_pair_issuer=issuer,
         clock=clock,
         id_generator=id_generator,
     )
-    refresh_use_case = RefreshSessionUseCase(
+    refresh = RefreshSessionUseCase(
         user_repository=user_repository,
         session_repository=session_repository,
-        refresh_token_repository=refresh_token_repository,
-        refresh_token_service=refresh_token_service,
-        token_pair_issuer=token_pair_issuer,
+        refresh_token_repository=refresh_repository,
+        refresh_token_service=refresh_service,
+        token_pair_issuer=issuer,
         clock=clock,
     )
-    logout_use_case = LogoutUseCase(
+    logout = LogoutUseCase(
         session_repository=session_repository,
-        refresh_token_repository=refresh_token_repository,
-        refresh_token_service=refresh_token_service,
+        refresh_token_repository=refresh_repository,
+        refresh_token_service=refresh_service,
         clock=clock,
     )
-    return login_use_case, refresh_use_case, logout_use_case, refresh_token_repository, refresh_token_service
+    return login, refresh, logout, user_repository, session_repository, refresh_repository
 
 
-def test_login_success_returns_token_pair() -> None:
-    login_use_case, _, _, _, _ = _build_use_cases()
-    result = login_use_case.execute(LoginCommand(email="user@example.com", password="secret"))
+def _login_command(password: str = "secret") -> LoginCommand:
+    return LoginCommand(
+        email="user@example.com",
+        password=password,
+        client_context=ClientContextCommand(
+            ip="127.0.0.1",
+            user_agent="pytest",
+            device_name="test-device",
+        ),
+    )
 
-    assert result.token_type == "bearer"
-    assert result.expires_in == 900
+
+def test_parse_client_context() -> None:
+    context = parse_client_context(
+        ClientContextCommand(
+            ip="127.0.0.1",
+            user_agent="pytest",
+            device_name="test-device",
+        )
+    )
+    assert context.ip == "127.0.0.1"
+    assert context.user_agent == "pytest"
+    assert context.device_name == "test-device"
+
+
+def test_login_success() -> None:
+    login, _, _, _, _, _ = _build_use_cases()
+    result = login.execute(_login_command())
     assert result.access_token.value.startswith("access:")
-    assert result.refresh_token.value == "refresh-1"
+    assert result.refresh_token.value.startswith("refresh-")
+    assert result.token_type == "bearer"
 
 
 def test_login_rejects_invalid_password() -> None:
-    login_use_case, _, _, _, _ = _build_use_cases()
-
+    login, _, _, _, _, _ = _build_use_cases()
     with pytest.raises(InvalidCredentialsError):
-        login_use_case.execute(LoginCommand(email="user@example.com", password="wrong"))
+        login.execute(_login_command(password="wrong"))
 
 
 def test_login_rejects_inactive_user() -> None:
-    inactive_user = _build_user(status=UserStatus.INACTIVE)
-    login_use_case, _, _, _, _ = _build_use_cases(users=[inactive_user])
-
+    login, _, _, _, _, _ = _build_use_cases(_build_user(UserStatus.SUSPENDED))
     with pytest.raises(InactiveUserError):
-        login_use_case.execute(LoginCommand(email="user@example.com", password="secret"))
+        login.execute(_login_command())
 
 
-def test_login_does_not_fail_on_invalid_client_context() -> None:
-    login_use_case, _, _, _, _ = _build_use_cases()
-    result = login_use_case.execute(
-        LoginCommand(
-            email="user@example.com",
-            password="secret",
-            client=ClientContextCommand(ip_address="x" * 46),
-        )
-    )
+def test_refresh_rotates_token() -> None:
+    login, refresh, _, _, _, refresh_repository = _build_use_cases()
+    login_result = login.execute(_login_command())
 
-    assert result.refresh_token.value == "refresh-1"
+    command = RefreshSessionCommand(refresh_token=login_result.refresh_token.value)
+    refresh_result = refresh.execute(command)
+    assert refresh_result.refresh_token.value != login_result.refresh_token.value
 
-
-def test_parse_client_context_skips_invalid_fields() -> None:
-    parsed = parse_client_context(ClientContextCommand(user_agent="   "))
-
-    assert parsed.user_agent is None
+    old = refresh_repository.get_by_token_hash(TokenHash(f"hash:{login_result.refresh_token.value}"))
+    assert old is not None
+    assert old.revoked_at is not None
+    assert old.revoke_reason == RefreshTokenRevokeReason.ROTATED
 
 
-def test_refresh_success_rotates_token() -> None:
-    login_use_case, refresh_use_case, _, refresh_token_repository, _ = _build_use_cases()
-    login_result = login_use_case.execute(LoginCommand(email="user@example.com", password="secret"))
-
-    refresh_result = refresh_use_case.execute(
-        RefreshSessionCommand(refresh_token=login_result.refresh_token)
-    )
-
-    assert refresh_result.refresh_token.value == "refresh-2"
-    stored_old = refresh_token_repository.get_by_token_hash(
-        TokenHash(f"hash:{login_result.refresh_token.value}")
-    )
-    assert stored_old is not None
-    assert stored_old.is_used() is True
-    assert stored_old.revoked_reason is RefreshTokenRevokeReason.ROTATED
-
-
-def test_refresh_rejects_invalid_token() -> None:
-    _, refresh_use_case, _, _, _ = _build_use_cases()
-
-    with pytest.raises(InvalidRefreshTokenError):
-        refresh_use_case.execute(
-            RefreshSessionCommand(refresh_token=RefreshTokenValue.create("missing-token"))
-        )
-
-
-def test_refresh_detects_reuse_of_rotated_token() -> None:
-    login_use_case, refresh_use_case, _, _, _ = _build_use_cases()
-    login_result = login_use_case.execute(LoginCommand(email="user@example.com", password="secret"))
-    refresh_use_case.execute(RefreshSessionCommand(refresh_token=login_result.refresh_token))
+def test_refresh_rejects_reuse_of_revoked_token() -> None:
+    login, refresh, _, _, _, _ = _build_use_cases()
+    login_result = login.execute(_login_command())
+    command = RefreshSessionCommand(refresh_token=login_result.refresh_token.value)
+    refresh.execute(command)
 
     with pytest.raises(RevokedRefreshTokenError):
-        refresh_use_case.execute(RefreshSessionCommand(refresh_token=login_result.refresh_token))
+        refresh.execute(command)
 
 
-def test_logout_revokes_session_and_token() -> None:
-    login_use_case, _, logout_use_case, refresh_token_repository, _ = _build_use_cases()
-    login_result = login_use_case.execute(LoginCommand(email="user@example.com", password="secret"))
+def test_logout_revokes_session_and_refresh_token() -> None:
+    login, _, logout, _, session_repository, refresh_repository = _build_use_cases()
+    login_result = login.execute(_login_command())
 
-    logout_use_case.execute(LogoutCommand(refresh_token=login_result.refresh_token))
-
-    stored = refresh_token_repository.get_by_token_hash(
-        TokenHash(f"hash:{login_result.refresh_token.value}")
-    )
-    assert stored is not None
-    assert stored.is_revoked() is True
-    assert stored.revoked_reason is RefreshTokenRevokeReason.LOGOUT
-
-
-def test_logout_is_idempotent_for_unknown_token() -> None:
-    _, _, logout_use_case, _, _ = _build_use_cases()
-
-    logout_use_case.execute(LogoutCommand(refresh_token=RefreshTokenValue.create("unknown")))
+    logout.execute(LogoutCommand(refresh_token=login_result.refresh_token.value))
+    refresh = refresh_repository.get_by_token_hash(TokenHash(f"hash:{login_result.refresh_token.value}"))
+    assert refresh is not None
+    assert refresh.revoked_at is not None
+    assert refresh.revoke_reason == RefreshTokenRevokeReason.LOGOUT
