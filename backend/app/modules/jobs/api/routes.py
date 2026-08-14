@@ -80,6 +80,11 @@ def get_job_status(
     use_case: GetJobUseCase = Depends(get_get_job_use_case),
 ) -> JobResponse:
     result = _handle_job_errors(
-        lambda: use_case.execute(get_job_command(job_id, context.organization_id))
+        lambda: use_case.execute(
+            get_job_command(
+                job_id,
+                None if context.is_super_admin else context.organization_id,
+            )
+        )
     )
     return job_result_to_response(result)
