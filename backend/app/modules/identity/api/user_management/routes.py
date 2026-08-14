@@ -8,16 +8,19 @@ from sqlalchemy.orm import Session
 from app.core.exceptions import AppException
 from app.db.session import get_db
 from app.modules.identity.api.authorization.context import AuthorizationContext
-from app.modules.identity.api.authorization.guards import require_permission
+from app.modules.identity.api.authorization.guards import get_access_token_claims, require_permission
 from app.modules.identity.api.membership.dependencies import assert_organization_scope
 from app.modules.identity.api.user_management.schemas import (
     AssignableRoleResponse,
     ErrorResponse,
+    ManagedOrganizationResponse,
     ManagedUserListResponse,
     ManagedUserResponse,
     ManualUserCreateRequest,
     ManualUserUpdateRequest,
+    UserManagementContextResponse,
 )
+from app.modules.identity.domain.authentication.value_objects.security.access_token import AccessTokenClaims
 from app.modules.identity.infrastructure.authentication.security import Argon2idPasswordHasher
 from app.modules.identity.infrastructure.authorization.persistence.models import (
     OrganizationRoleModel,
@@ -25,6 +28,7 @@ from app.modules.identity.infrastructure.authorization.persistence.models import
     UserRoleModel,
 )
 from app.modules.identity.infrastructure.membership.persistence.models import MembershipModel
+from app.modules.identity.infrastructure.organization.persistence.models import OrganizationModel
 from app.modules.identity.infrastructure.persistence.models import UserModel
 
 router = APIRouter(tags=["user-management"])
@@ -177,6 +181,48 @@ def _assign_role(
             revoked_at=None,
             assigned_by=assigned_by,
         )
+    )
+
+
+@router.get(
+    "/user-management/context",
+    response_model=UserManagementContextResponse,
+    responses={401: {"model": ErrorResponse}},
+)
+def get_user_management_context(
+    claims: AccessTokenClaims = Depends(get_access_token_claims),
+    db: Session = Depends(get_db),
+) -> UserManagementContextResponse:
+    user_id = UUID(str(claims.sub.value))
+    is_super_admin = _actor_is_super_admin(db, user_id)
+
+    if is_super_admin:
+        organizations = db.scalars(
+            select(OrganizationModel).where(
+                OrganizationModel.deleted_at.is_(None),
+                OrganizationModel.status == "active",
+            ).order_by(OrganizationModel.name.asc())
+        ).all()
+    else:
+        organizations = db.scalars(
+            select(OrganizationModel)
+            .join(MembershipModel, MembershipModel.organization_id == OrganizationModel.id)
+            .where(
+                MembershipModel.user_id == user_id,
+                MembershipModel.deleted_at.is_(None),
+                MembershipModel.status == "active",
+                OrganizationModel.deleted_at.is_(None),
+                OrganizationModel.status == "active",
+            )
+            .order_by(OrganizationModel.name.asc())
+        ).unique().all()
+
+    return UserManagementContextResponse(
+        is_super_admin=is_super_admin,
+        organizations=[
+            ManagedOrganizationResponse(id=item.id, name=item.name, slug=item.slug)
+            for item in organizations
+        ],
     )
 
 
