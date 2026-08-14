@@ -7,7 +7,7 @@ from fastapi import Depends, Header, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from app.core.exceptions import AppException
-from app.modules.identity.api.authentication.dependencies import get_token_service
+from app.modules.identity.api.authentication.dependencies import get_token_service, get_user_repository
 from app.modules.identity.api.authorization.context import (
     AuthenticatedOrganizationContext,
     AuthorizationContext,
@@ -20,6 +20,7 @@ from app.modules.identity.api.authorization.dependencies import (
 from app.modules.identity.api.authorization.error_mapping import map_authorization_error
 from app.modules.identity.application.authorization import AuthorizationService, CheckPermissionCommand
 from app.modules.identity.domain.authentication.ports.token_service import TokenService
+from app.modules.identity.domain.authentication.ports.user_repository import UserRepository
 from app.modules.identity.domain.authentication.value_objects.security.access_token import (
     AccessToken,
     AccessTokenClaims,
@@ -57,10 +58,23 @@ def get_organization_id(
     return x_organization_id
 
 
+def _assert_password_change_complete(
+    claims: AccessTokenClaims,
+    user_repository: UserRepository,
+) -> None:
+    user = user_repository.get_by_id(claims.sub)
+    if user is None:
+        raise AppException("Not authenticated", status_code=status.HTTP_401_UNAUTHORIZED)
+    if user.must_change_password:
+        raise AppException("Password change required", status_code=status.HTTP_403_FORBIDDEN)
+
+
 def get_authorization_context(
     claims: AccessTokenClaims = Depends(get_access_token_claims),
     organization_id: UUID = Depends(get_organization_id),
+    user_repository: UserRepository = Depends(get_user_repository),
 ) -> AuthorizationContext:
+    _assert_password_change_complete(claims, user_repository)
     return AuthorizationContext(
         user_id=claims.sub.value,
         organization_id=organization_id,
@@ -92,7 +106,9 @@ def require_organization_membership() -> Callable[..., AuthenticatedOrganization
         organization_id: UUID = Depends(get_organization_id),
         membership_repository: MembershipRepository = Depends(get_membership_repository),
         platform_user_reader: PlatformUserReader = Depends(get_platform_user_reader),
+        user_repository: UserRepository = Depends(get_user_repository),
     ) -> AuthenticatedOrganizationContext:
+        _assert_password_change_complete(claims, user_repository)
         _assert_active_membership(
             claims,
             organization_id,
