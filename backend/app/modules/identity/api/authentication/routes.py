@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, Request, Response, status
 
+from app.core.exceptions import AppException
 from app.modules.identity.api.authentication.dependencies import (
     get_clock,
     get_login_use_case,
@@ -93,6 +94,7 @@ def logout(
     status_code=status.HTTP_204_NO_CONTENT,
     responses={
         204: {"description": "Password changed successfully"},
+        400: {"model": ErrorResponse},
         401: {"model": ErrorResponse},
     },
 )
@@ -109,6 +111,12 @@ def change_password(
 
     if not password_hasher.verify(payload.current_password, user.password_hash):
         raise map_authentication_error(InvalidCredentialsError("Invalid credentials"))
+
+    if password_hasher.verify(payload.new_password, user.password_hash):
+        raise AppException(
+            "New password must be different from the current password",
+            status_code=status.HTTP_400_BAD_REQUEST,
+        )
 
     user.password_hash = password_hasher.hash(payload.new_password)
     user.must_change_password = False
