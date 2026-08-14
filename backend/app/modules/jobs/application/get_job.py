@@ -11,6 +11,9 @@ class GetJobUseCase:
 
     def execute(self, command: GetJobCommand) -> JobResult:
         job = self._job_repository.get_by_id(command.job_id)
-        if job is None or job.organization_id != command.organization_id:
+        if job is None or (
+            command.organization_id is not None
+            and job.organization_id != command.organization_id
+        ):
             raise JobNotFoundError(f"Job not found: {command.job_id}")
         return to_job_result(job)
