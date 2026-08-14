@@ -13,7 +13,9 @@ from app.modules.identity.api.membership.dependencies import (
 from app.modules.identity.application.authentication.id_generator import IdGenerator
 from app.modules.identity.application.membership.role_assignment import MembershipRoleAssigner
 from app.modules.identity.application.organization.create_organization import CreateOrganizationUseCase
+from app.modules.identity.application.organization.delete_organization import DeleteOrganizationUseCase
 from app.modules.identity.application.organization.get_organization import GetOrganizationUseCase
+from app.modules.identity.application.organization.list_organizations import ListOrganizationsUseCase
 from app.modules.identity.application.organization.suspend_organization import SuspendOrganizationUseCase
 from app.modules.identity.application.organization.update_organization import UpdateOrganizationUseCase
 from app.modules.identity.domain.authentication.ports.clock import Clock
@@ -40,6 +42,16 @@ def get_create_organization_use_case(
     )
 
 
+def get_list_organizations_use_case(
+    organization_repository: OrganizationRepository = Depends(get_organization_repository),
+    membership_repository: MembershipRepository = Depends(get_membership_repository),
+) -> ListOrganizationsUseCase:
+    return ListOrganizationsUseCase(
+        organization_repository=organization_repository,
+        membership_repository=membership_repository,
+    )
+
+
 def get_get_organization_use_case(
     organization_repository: OrganizationRepository = Depends(get_organization_repository),
 ) -> GetOrganizationUseCase:
@@ -54,6 +66,12 @@ def get_update_organization_use_case(
         organization_repository=organization_repository,
         clock=clock,
     )
+
+
+def get_delete_organization_use_case(
+    organization_repository: OrganizationRepository = Depends(get_organization_repository),
+) -> DeleteOrganizationUseCase:
+    return DeleteOrganizationUseCase(organization_repository=organization_repository)
 
 
 def get_suspend_organization_use_case(
