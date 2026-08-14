@@ -11,7 +11,10 @@ class GetNotificationUseCase:
 
     def execute(self, command: GetNotificationCommand) -> GetNotificationResult:
         notification = self._notification_repository.get_by_id(command.notification_id)
-        if notification is None or notification.organization_id != command.organization_id:
+        if notification is None or (
+            command.organization_id is not None
+            and notification.organization_id != command.organization_id
+        ):
             raise NotificationNotFoundError("Notification not found")
         return self._to_result(notification)
 
