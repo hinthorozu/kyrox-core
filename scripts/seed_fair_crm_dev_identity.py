@@ -3,10 +3,12 @@
 
 Canonical development identity model:
 - Keep/create the Fair CRM development organization.
-- Keep/create only dev@example.com as the bootstrap platform user.
-- dev@example.com is always DB-backed Super Admin (is_super_admin = TRUE).
-- Super Admin is platform-wide and therefore receives no organization
-  membership, organization role, or RBAC permission mapping from this seed.
+- Keep/create dev@example.com as the bootstrap platform user.
+- On a fresh database dev@example.com is created as Super Admin.
+- On later seed runs the existing DB value of is_super_admin is preserved;
+  deploys must never override an administrator's DB-side decision.
+- A Super Admin is platform-wide and therefore needs no organization
+  membership, organization role, or RBAC permission mapping.
 - The deprecated Owner role is removed if an older seed recreated it.
 
 Safe to run multiple times.
@@ -129,11 +131,15 @@ def ensure_dev_organization(cur) -> str:
     return DEV_ORG_ID
 
 
-def ensure_dev_super_admin(cur) -> str:
+def ensure_dev_user(cur) -> tuple[str, bool]:
+    """Create fresh bootstrap user as Super Admin; preserve DB flag thereafter."""
     password_hash = PasswordHasher().hash(DEV_PASSWORD)
     now = _now()
 
-    cur.execute("SELECT id FROM identity_users WHERE id = %s LIMIT 1", (DEV_USER_ID,))
+    cur.execute(
+        "SELECT id, is_super_admin FROM identity_users WHERE id = %s LIMIT 1",
+        (DEV_USER_ID,),
+    )
     row = cur.fetchone()
     if row:
         user_id = str(row[0])
@@ -143,17 +149,23 @@ def ensure_dev_super_admin(cur) -> str:
             SET email = %s,
                 password_hash = %s,
                 status = 'active',
-                is_super_admin = TRUE,
                 updated_at = %s,
                 deleted_at = NULL
             WHERE id = %s
             """,
             (DEV_EMAIL, password_hash, now, user_id),
         )
-        print(f"Updated dev Super Admin: {DEV_EMAIL} ({user_id})")
-        return user_id
+        is_super_admin = bool(row[1])
+        print(
+            f"Updated existing dev user: {DEV_EMAIL} ({user_id}), "
+            f"is_super_admin={str(is_super_admin).lower()} (preserved)"
+        )
+        return user_id, is_super_admin
 
-    cur.execute("SELECT id FROM identity_users WHERE lower(email) = lower(%s) LIMIT 1", (DEV_EMAIL,))
+    cur.execute(
+        "SELECT id, is_super_admin FROM identity_users WHERE lower(email) = lower(%s) LIMIT 1",
+        (DEV_EMAIL,),
+    )
     by_email = cur.fetchone()
     if by_email:
         user_id = str(by_email[0])
@@ -162,15 +174,18 @@ def ensure_dev_super_admin(cur) -> str:
             UPDATE identity_users
             SET password_hash = %s,
                 status = 'active',
-                is_super_admin = TRUE,
                 updated_at = %s,
                 deleted_at = NULL
             WHERE id = %s
             """,
             (password_hash, now, user_id),
         )
-        print(f"Promoted existing dev user to Super Admin: {DEV_EMAIL} ({user_id})")
-        return user_id
+        is_super_admin = bool(by_email[1])
+        print(
+            f"Updated existing dev user by email: {DEV_EMAIL} ({user_id}), "
+            f"is_super_admin={str(is_super_admin).lower()} (preserved)"
+        )
+        return user_id, is_super_admin
 
     cur.execute(
         """
@@ -181,8 +196,8 @@ def ensure_dev_super_admin(cur) -> str:
         """,
         (DEV_USER_ID, DEV_EMAIL, password_hash, now, now),
     )
-    print(f"Created dev Super Admin: {DEV_EMAIL} ({DEV_USER_ID})")
-    return DEV_USER_ID
+    print(f"Created fresh dev Super Admin: {DEV_EMAIL} ({DEV_USER_ID})")
+    return DEV_USER_ID, True
 
 
 def remove_super_admin_org_assignments(cur, user_id: str) -> None:
@@ -211,19 +226,7 @@ def remove_deprecated_owner_role(cur) -> None:
         print(f"Removed deprecated Owner role templates: {cur.rowcount}")
 
 
-def verify_super_admin(cur, user_id: str) -> None:
-    cur.execute(
-        """
-        SELECT status, is_super_admin, deleted_at
-        FROM identity_users
-        WHERE id = %s
-        """,
-        (user_id,),
-    )
-    row = cur.fetchone()
-    if row is None or row[0] != "active" or row[1] is not True or row[2] is not None:
-        raise SeedError("dev@example.com was not persisted as an active Super Admin")
-
+def verify_platform_super_admin_shape(cur, user_id: str) -> None:
     cur.execute("SELECT COUNT(*) FROM identity_memberships WHERE user_id = %s", (user_id,))
     if int(cur.fetchone()[0]) != 0:
         raise SeedError("Super Admin must not have organization memberships after seed")
@@ -234,25 +237,25 @@ def verify_super_admin(cur, user_id: str) -> None:
 
 
 def main() -> int:
-    print(f"Seeding KYROX Core dev Super Admin against {CORE_DB_URL.split('@')[-1]}")
+    print(f"Seeding KYROX Core dev identity against {CORE_DB_URL.split('@')[-1]}")
     conn = _connect(CORE_DB_URL)
     conn.autocommit = False
     try:
         with conn.cursor() as cur:
             assert_core_migration_ready(cur)
             ensure_dev_organization(cur)
-            user_id = ensure_dev_super_admin(cur)
-            remove_super_admin_org_assignments(cur, user_id)
+            user_id, user_is_super_admin = ensure_dev_user(cur)
+            if user_is_super_admin:
+                remove_super_admin_org_assignments(cur, user_id)
+                verify_platform_super_admin_shape(cur, user_id)
             remove_deprecated_owner_role(cur)
-            verify_super_admin(cur, user_id)
 
         conn.commit()
         print(
             "Seed complete:",
             f"user={DEV_EMAIL}",
-            "is_super_admin=true",
-            "organization_memberships=0",
-            "organization_roles=0",
+            f"is_super_admin={str(user_is_super_admin).lower()}",
+            "db_flag_preserved=true",
         )
         return 0
     except Exception:
