@@ -48,4 +48,5 @@ def result_to_token_response(result: AuthTokenPairResult) -> TokenResponse:
         refresh_token=result.refresh_token.value,
         token_type=result.token_type,
         expires_in=result.expires_in,
+        must_change_password=result.must_change_password,
     )
