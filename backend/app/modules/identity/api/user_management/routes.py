@@ -39,16 +39,25 @@ def _actor_is_super_admin(db: Session, user_id: UUID) -> bool:
     return bool(actor and actor.deleted_at is None and actor.status == "active" and actor.is_super_admin)
 
 
-def _assert_super_admin_change_allowed(db: Session, context: AuthorizationContext, requested: bool | None) -> bool:
+def _assert_super_admin_change_allowed(
+    db: Session,
+    context: AuthorizationContext,
+    requested: bool | None,
+) -> bool:
     actor_is_super = _actor_is_super_admin(db, context.user_id)
-    if requested is True and not actor_is_super:
-        raise AppException("Only a Super Admin can grant Super Admin access", status_code=status.HTTP_403_FORBIDDEN)
     if requested is not None and not actor_is_super:
-        raise AppException("Only a Super Admin can change Super Admin access", status_code=status.HTTP_403_FORBIDDEN)
+        raise AppException(
+            "Only a Super Admin can change Super Admin access",
+            status_code=status.HTTP_403_FORBIDDEN,
+        )
     return actor_is_super
 
 
-def _resolve_role(db: Session, organization_id: UUID, role_id: UUID) -> tuple[RoleModel, OrganizationRoleModel]:
+def _resolve_role(
+    db: Session,
+    organization_id: UUID,
+    role_id: UUID,
+) -> tuple[RoleModel, OrganizationRoleModel]:
     stmt = (
         select(RoleModel, OrganizationRoleModel)
         .join(OrganizationRoleModel, OrganizationRoleModel.role_id == RoleModel.id)
@@ -62,11 +71,18 @@ def _resolve_role(db: Session, organization_id: UUID, role_id: UUID) -> tuple[Ro
     )
     row = db.execute(stmt).first()
     if row is None:
-        raise AppException("Role is not available for this organization", status_code=status.HTTP_400_BAD_REQUEST)
+        raise AppException(
+            "Role is not available for this organization",
+            status_code=status.HTTP_400_BAD_REQUEST,
+        )
     return row[0], row[1]
 
 
-def _active_role_for_user(db: Session, organization_id: UUID, user_id: UUID) -> AssignableRoleResponse | None:
+def _active_role_for_user(
+    db: Session,
+    organization_id: UUID,
+    user_id: UUID,
+) -> AssignableRoleResponse | None:
     stmt = (
         select(RoleModel)
         .join(OrganizationRoleModel, OrganizationRoleModel.role_id == RoleModel.id)
@@ -88,15 +104,23 @@ def _active_role_for_user(db: Session, organization_id: UUID, user_id: UUID) -> 
     return AssignableRoleResponse(id=role.id, name=role.name, slug=role.slug)
 
 
-def _membership_for_user(db: Session, organization_id: UUID, user_id: UUID) -> MembershipModel:
-    stmt = select(MembershipModel).where(
-        MembershipModel.organization_id == organization_id,
-        MembershipModel.user_id == user_id,
-        MembershipModel.deleted_at.is_(None),
-    )
-    membership = db.scalars(stmt).first()
+def _membership_for_user(
+    db: Session,
+    organization_id: UUID,
+    user_id: UUID,
+) -> MembershipModel:
+    membership = db.scalars(
+        select(MembershipModel).where(
+            MembershipModel.organization_id == organization_id,
+            MembershipModel.user_id == user_id,
+            MembershipModel.deleted_at.is_(None),
+        )
+    ).first()
     if membership is None:
-        raise AppException("User not found in this organization", status_code=status.HTTP_404_NOT_FOUND)
+        raise AppException(
+            "User not found in this organization",
+            status_code=status.HTTP_404_NOT_FOUND,
+        )
     return membership
 
 
@@ -178,7 +202,10 @@ def list_assignable_roles(
         )
         .order_by(RoleModel.name.asc())
     )
-    return [AssignableRoleResponse(id=role.id, name=role.name, slug=role.slug) for role in db.scalars(stmt).all()]
+    return [
+        AssignableRoleResponse(id=role.id, name=role.name, slug=role.slug)
+        for role in db.scalars(stmt).all()
+    ]
 
 
 @router.get(
@@ -193,7 +220,7 @@ def list_users(
 ) -> ManagedUserListResponse:
     assert_organization_scope(organization_id, context)
     actor_is_super = _actor_is_super_admin(db, context.user_id)
-    stmt = (
+    users = db.scalars(
         select(UserModel)
         .join(MembershipModel, MembershipModel.user_id == UserModel.id)
         .where(
@@ -202,10 +229,12 @@ def list_users(
             UserModel.deleted_at.is_(None),
         )
         .order_by(UserModel.email.asc())
-    )
-    users = db.scalars(stmt).unique().all()
+    ).unique().all()
     return ManagedUserListResponse(
-        items=[_to_response(db, organization_id, user, expose_super_admin=actor_is_super) for user in users],
+        items=[
+            _to_response(db, organization_id, user, expose_super_admin=actor_is_super)
+            for user in users
+        ],
         can_manage_super_admin=actor_is_super,
     )
 
@@ -213,7 +242,11 @@ def list_users(
 @router.get(
     "/organizations/{organization_id}/users/{user_id}",
     response_model=ManagedUserResponse,
-    responses={400: {"model": ErrorResponse}, 403: {"model": ErrorResponse}, 404: {"model": ErrorResponse}},
+    responses={
+        400: {"model": ErrorResponse},
+        403: {"model": ErrorResponse},
+        404: {"model": ErrorResponse},
+    },
 )
 def get_user(
     organization_id: UUID,
@@ -226,14 +259,23 @@ def get_user(
     user = db.get(UserModel, user_id)
     if user is None or user.deleted_at is not None:
         raise AppException("User not found", status_code=status.HTTP_404_NOT_FOUND)
-    return _to_response(db, organization_id, user, expose_super_admin=_actor_is_super_admin(db, context.user_id))
+    return _to_response(
+        db,
+        organization_id,
+        user,
+        expose_super_admin=_actor_is_super_admin(db, context.user_id),
+    )
 
 
 @router.post(
     "/organizations/{organization_id}/users/manual",
     response_model=ManagedUserResponse,
     status_code=status.HTTP_201_CREATED,
-    responses={400: {"model": ErrorResponse}, 403: {"model": ErrorResponse}, 409: {"model": ErrorResponse}},
+    responses={
+        400: {"model": ErrorResponse},
+        403: {"model": ErrorResponse},
+        409: {"model": ErrorResponse},
+    },
 )
 def create_user(
     organization_id: UUID,
@@ -242,25 +284,24 @@ def create_user(
     db: Session = Depends(get_db),
 ) -> ManagedUserResponse:
     assert_organization_scope(organization_id, context)
-    actor_is_super = _assert_super_admin_change_allowed(
-        db,
-        context,
-        payload.is_super_admin if payload.is_super_admin else None,
-    )
+    actor_is_super = _actor_is_super_admin(db, context.user_id)
+    if payload.is_super_admin:
+        _assert_super_admin_change_allowed(db, context, payload.is_super_admin)
+
     email = payload.email.strip().lower()
-    existing = db.scalars(select(UserModel).where(func.lower(UserModel.email) == email)).first()
+    existing = db.scalars(
+        select(UserModel).where(func.lower(UserModel.email) == email)
+    ).first()
     if existing is not None:
         raise AppException("User already exists", status_code=status.HTTP_409_CONFLICT)
 
     _resolve_role(db, organization_id, payload.role_id)
     now = _now()
-    password_hash = Argon2idPasswordHasher().hash(payload.password).value
     user = UserModel(
         email=email,
-        password_hash=password_hash,
+        password_hash=Argon2idPasswordHasher().hash(payload.password).value,
         status=payload.status.value,
-        is_super_admin=bool(payload.is_super_admin) if actor_is_super else False,
-        must_change_password=False,
+        is_super_admin=payload.is_super_admin if actor_is_super else False,
         created_at=now,
         updated_at=now,
         deleted_at=None,
@@ -295,7 +336,12 @@ def create_user(
 @router.patch(
     "/organizations/{organization_id}/users/{user_id}",
     response_model=ManagedUserResponse,
-    responses={400: {"model": ErrorResponse}, 403: {"model": ErrorResponse}, 404: {"model": ErrorResponse}, 409: {"model": ErrorResponse}},
+    responses={
+        400: {"model": ErrorResponse},
+        403: {"model": ErrorResponse},
+        404: {"model": ErrorResponse},
+        409: {"model": ErrorResponse},
+    },
 )
 def update_user(
     organization_id: UUID,
@@ -312,21 +358,29 @@ def update_user(
 
     actor_is_super = _actor_is_super_admin(db, context.user_id)
     if user.is_super_admin and not actor_is_super:
-        raise AppException("Only a Super Admin can modify a Super Admin", status_code=status.HTTP_403_FORBIDDEN)
+        raise AppException(
+            "Only a Super Admin can modify a Super Admin",
+            status_code=status.HTTP_403_FORBIDDEN,
+        )
     if payload.is_super_admin is not None:
         _assert_super_admin_change_allowed(db, context, payload.is_super_admin)
 
     if payload.email is not None:
         email = payload.email.strip().lower()
         duplicate = db.scalars(
-            select(UserModel).where(func.lower(UserModel.email) == email, UserModel.id != user_id)
+            select(UserModel).where(
+                func.lower(UserModel.email) == email,
+                UserModel.id != user_id,
+            )
         ).first()
         if duplicate is not None:
-            raise AppException("Email is already in use", status_code=status.HTTP_409_CONFLICT)
+            raise AppException(
+                "Email is already in use",
+                status_code=status.HTTP_409_CONFLICT,
+            )
         user.email = email
     if payload.password is not None:
         user.password_hash = Argon2idPasswordHasher().hash(payload.password).value
-        user.must_change_password = False
     if payload.status is not None:
         user.status = payload.status.value
     if payload.is_super_admin is not None:
@@ -347,7 +401,11 @@ def update_user(
 @router.delete(
     "/organizations/{organization_id}/users/{user_id}",
     status_code=status.HTTP_204_NO_CONTENT,
-    responses={400: {"model": ErrorResponse}, 403: {"model": ErrorResponse}, 404: {"model": ErrorResponse}},
+    responses={
+        400: {"model": ErrorResponse},
+        403: {"model": ErrorResponse},
+        404: {"model": ErrorResponse},
+    },
 )
 def delete_user(
     organization_id: UUID,
@@ -363,7 +421,10 @@ def delete_user(
 
     actor_is_super = _actor_is_super_admin(db, context.user_id)
     if user.is_super_admin and not actor_is_super:
-        raise AppException("Only a Super Admin can remove a Super Admin", status_code=status.HTTP_403_FORBIDDEN)
+        raise AppException(
+            "Only a Super Admin can remove a Super Admin",
+            status_code=status.HTTP_403_FORBIDDEN,
+        )
 
     now = _now()
     membership.status = "removed"
