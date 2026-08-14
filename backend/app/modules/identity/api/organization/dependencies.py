@@ -7,11 +7,9 @@ from app.modules.identity.api.authentication.dependencies import (
 )
 from app.modules.identity.api.membership.dependencies import (
     get_membership_repository,
-    get_membership_role_assigner,
     get_organization_repository,
 )
 from app.modules.identity.application.authentication.id_generator import IdGenerator
-from app.modules.identity.application.membership.role_assignment import MembershipRoleAssigner
 from app.modules.identity.application.organization.create_organization import CreateOrganizationUseCase
 from app.modules.identity.application.organization.delete_organization import DeleteOrganizationUseCase
 from app.modules.identity.application.organization.get_organization import GetOrganizationUseCase
@@ -26,17 +24,13 @@ from app.modules.identity.domain.organization.ports.organization_repository impo
 
 def get_create_organization_use_case(
     organization_repository: OrganizationRepository = Depends(get_organization_repository),
-    membership_repository: MembershipRepository = Depends(get_membership_repository),
     user_repository: UserRepository = Depends(get_user_repository),
-    role_assigner: MembershipRoleAssigner = Depends(get_membership_role_assigner),
     clock: Clock = Depends(get_clock),
     id_generator: IdGenerator = Depends(get_id_generator),
 ) -> CreateOrganizationUseCase:
     return CreateOrganizationUseCase(
         organization_repository=organization_repository,
-        membership_repository=membership_repository,
         user_repository=user_repository,
-        role_assigner=role_assigner,
         clock=clock,
         id_generator=id_generator,
     )
