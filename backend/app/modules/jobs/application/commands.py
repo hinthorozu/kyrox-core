@@ -15,7 +15,7 @@ class EnqueueJobCommand:
 @dataclass(frozen=True, slots=True)
 class GetJobCommand:
     job_id: UUID
-    organization_id: UUID
+    organization_id: UUID | None
 
 
 @dataclass(frozen=True, slots=True)
