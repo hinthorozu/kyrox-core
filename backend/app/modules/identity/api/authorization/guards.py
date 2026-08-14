@@ -58,13 +58,9 @@ def get_organization_id(
 
 
 def is_super_admin(user_id: UUID, platform_user_reader: PlatformUserReader) -> bool:
-    """Platform god mode. This is independent from roles, memberships and permission rows."""
+    """Platform god mode. The DB flag is independent from RBAC and account scope state."""
     snapshot = platform_user_reader.get_snapshot(UserId(user_id))
-    return bool(
-        snapshot is not None
-        and snapshot.can_be_authorized()
-        and snapshot.is_super_admin
-    )
+    return bool(snapshot is not None and snapshot.is_super_admin)
 
 
 def get_authorization_context(
