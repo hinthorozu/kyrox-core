@@ -24,6 +24,14 @@ class CreateOrganizationUserError(Exception):
     pass
 
 
+class OrganizationNotFoundForUserCreationError(CreateOrganizationUserError):
+    pass
+
+
+class UserAlreadyExistsError(CreateOrganizationUserError):
+    pass
+
+
 @dataclass(frozen=True, slots=True)
 class CreateOrganizationUserCommand:
     organization_id: OrganizationId
@@ -62,11 +70,11 @@ class CreateOrganizationUserUseCase:
 
     def execute(self, command: CreateOrganizationUserCommand) -> CreateOrganizationUserResult:
         if self._organization_repository.get_by_id(command.organization_id) is None:
-            raise CreateOrganizationUserError("Organization not found")
+            raise OrganizationNotFoundForUserCreationError("Organization not found")
 
         email = Email.create(command.email)
         if self._user_repository.get_by_email(email) is not None:
-            raise CreateOrganizationUserError("User already exists")
+            raise UserAlreadyExistsError("User already exists")
 
         now = self._clock.now()
         user = self._user_repository.add(
