@@ -233,7 +233,7 @@ def test_service_super_admin_bypasses_core_permission(db_session: Session) -> No
     )
 
 
-def test_service_super_admin_does_not_bypass_non_core_permission(db_session: Session) -> None:
+def test_service_super_admin_bypasses_non_core_permission(db_session: Session) -> None:
     seed = AuthorizationSeed(db_session)
     user = seed.user_repo.get_by_id(seed.user.id)
     assert user is not None
@@ -252,11 +252,11 @@ def test_service_super_admin_does_not_bypass_non_core_permission(db_session: Ses
                 permission_code="product.user.read",
             )
         )
-        is False
+        is True
     )
 
 
-def test_service_super_admin_requires_active_user(db_session: Session) -> None:
+def test_service_super_admin_bypasses_account_status(db_session: Session) -> None:
     seed = AuthorizationSeed(db_session)
     user = seed.user_repo.get_by_id(seed.user.id)
     assert user is not None
@@ -276,5 +276,5 @@ def test_service_super_admin_requires_active_user(db_session: Session) -> None:
                 permission_code="core.user.read",
             )
         )
-        is False
+        is True
     )

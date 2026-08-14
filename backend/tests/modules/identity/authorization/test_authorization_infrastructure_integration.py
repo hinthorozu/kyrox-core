@@ -364,3 +364,23 @@ def test_sqlalchemy_platform_user_reader_returns_snapshot(db_session: Session) -
     assert snapshot.is_active is True
     assert snapshot.is_super_admin is False
     assert snapshot.can_be_authorized() is True
+
+
+def test_sqlalchemy_platform_user_reader_preserves_super_admin_flag_before_account_state(
+    db_session: Session,
+) -> None:
+    user, _org = _seed_user_and_org(db_session)
+    model = db_session.get(UserModel, user.id)
+    assert model is not None
+    model.is_super_admin = True
+    model.status = "suspended"
+    model.deleted_at = _now()
+    db_session.commit()
+
+    snapshot = SqlAlchemyPlatformUserReader(db_session).get_snapshot(UserId(user.id))
+
+    assert snapshot is not None
+    assert snapshot.is_super_admin is True
+    assert snapshot.is_active is False
+    assert snapshot.is_deleted is True
+    assert snapshot.can_be_authorized() is False

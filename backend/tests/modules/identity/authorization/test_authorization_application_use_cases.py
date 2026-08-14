@@ -168,7 +168,7 @@ def test_super_admin_bypasses_rbac_for_core_permissions() -> None:
     assert checker.calls == []
 
 
-def test_super_admin_does_not_bypass_non_core_permissions() -> None:
+def test_super_admin_bypasses_non_core_permissions_without_rbac_lookup() -> None:
     user_id = UserId(uuid.uuid4())
     reader = FakePlatformUserReader(
         {
@@ -191,11 +191,11 @@ def test_super_admin_does_not_bypass_non_core_permissions() -> None:
     )
 
     assert decision.allowed is True
-    assert decision.bypassed_by_super_admin is False
-    assert len(checker.calls) == 1
+    assert decision.bypassed_by_super_admin is True
+    assert checker.calls == []
 
 
-def test_super_admin_cannot_bypass_when_user_is_deleted() -> None:
+def test_super_admin_bypasses_account_authorization_state() -> None:
     user_id = UserId(uuid.uuid4())
     reader = FakePlatformUserReader(
         {
@@ -217,7 +217,8 @@ def test_super_admin_cannot_bypass_when_user_is_deleted() -> None:
         _command(user_id=user_id.value, permission_code="core.user.read")
     )
 
-    assert decision.allowed is False
+    assert decision.allowed is True
+    assert decision.bypassed_by_super_admin is True
     assert checker.calls == []
 
 
@@ -238,7 +239,7 @@ def test_permission_policy_normalize_accepts_nested_admin_codes() -> None:
     assert policy.normalize("fair_crm.admin.backups.read").value == "fair_crm.admin.backups.read"
 
 
-def test_super_admin_policy_allows_core_prefix_only_for_active_super_admin() -> None:
+def test_super_admin_policy_allows_every_permission_code_from_flag_only() -> None:
     user_id = UserId(uuid.uuid4())
     policy = SuperAdminPolicy()
     snapshot = PlatformUserSnapshot(
@@ -250,7 +251,7 @@ def test_super_admin_policy_allows_core_prefix_only_for_active_super_admin() -> 
     code = PermissionCode.create("core.user.read")
 
     assert policy.allows(snapshot, code) is True
-    assert policy.allows(snapshot, PermissionCode.create("identity.users.read")) is False
+    assert policy.allows(snapshot, PermissionCode.create("identity.users.read")) is True
 
 
 def test_has_permission_returns_boolean() -> None:

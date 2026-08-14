@@ -14,12 +14,12 @@ class SqlAlchemyPlatformUserReader:
 
     def get_snapshot(self, user_id: UserId) -> PlatformUserSnapshot | None:
         model = self._session.get(UserModel, user_id.value)
-        if model is None or model.deleted_at is not None:
+        if model is None:
             return None
 
         return PlatformUserSnapshot(
             user_id=user_id,
             is_active=UserStatus(model.status) is UserStatus.ACTIVE,
             is_super_admin=model.is_super_admin,
-            is_deleted=False,
+            is_deleted=model.deleted_at is not None,
         )
