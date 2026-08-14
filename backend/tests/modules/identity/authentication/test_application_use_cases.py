@@ -31,6 +31,9 @@ from app.modules.identity.domain.authentication.exceptions import (
 )
 from app.modules.identity.domain.authentication.ports.clock import Clock
 from app.modules.identity.domain.authentication.ports.password_hasher import PasswordHasher
+from app.modules.identity.domain.authentication.value_objects.identity.refresh_token_id import (
+    RefreshTokenId,
+)
 from app.modules.identity.domain.authentication.value_objects.identity.session_id import SessionId
 from app.modules.identity.domain.authentication.value_objects.identity.user_id import UserId
 from app.modules.identity.domain.authentication.value_objects.security.access_token import (
