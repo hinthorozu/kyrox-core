@@ -4,6 +4,7 @@ from app.modules.identity.application.authorization.results import Authorization
 from app.modules.identity.domain.authorization.exceptions import PermissionDeniedError
 from app.modules.identity.domain.authorization.ports.permission_checker import PermissionChecker
 from app.modules.identity.domain.authorization.ports.platform_user_reader import PlatformUserReader
+from app.modules.identity.domain.authorization.value_objects.rbac.permission_code import PermissionCode
 
 
 class AuthorizationService:
@@ -20,23 +21,27 @@ class AuthorizationService:
         self._permission_policy = permission_policy or PermissionPolicy()
 
     def check_permission(self, command: CheckPermissionCommand) -> AuthorizationDecision:
-        permission_code = self._permission_policy.normalize(command.permission_code)
-
         snapshot = self._platform_user_reader.get_snapshot(command.user_id)
         if snapshot is None or not snapshot.can_be_authorized():
+            permission_code = self._permission_policy.normalize(command.permission_code)
             return AuthorizationDecision(
                 allowed=False,
                 permission_code=permission_code,
                 denial_reason="user_not_authorizable",
             )
 
-        if self._super_admin_policy.allows(snapshot, permission_code):
+        # Super Admin is checked before RBAC/permission normalization or lookup.
+        # The DB-backed platform flag is therefore independent from seeded
+        # permission rows, role mappings and organization-scoped CRUD grants.
+        if snapshot.is_super_admin:
+            raw_permission = command.permission_code.strip().lower()
             return AuthorizationDecision(
                 allowed=True,
-                permission_code=permission_code,
+                permission_code=PermissionCode(value=raw_permission or "super_admin.bypass.allowed"),
                 bypassed_by_super_admin=True,
             )
 
+        permission_code = self._permission_policy.normalize(command.permission_code)
         allowed = self._permission_checker.has_permission(
             command.user_id,
             command.organization_id,
