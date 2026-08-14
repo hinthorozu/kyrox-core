@@ -6,7 +6,9 @@ from app.modules.identity.api.organization.schemas import (
 )
 from app.modules.identity.application.organization.commands import (
     CreateOrganizationCommand,
+    DeleteOrganizationCommand,
     GetOrganizationCommand,
+    ListOrganizationsCommand,
     SuspendOrganizationCommand,
     UpdateOrganizationCommand,
 )
@@ -29,6 +31,10 @@ def create_organization_request_to_command(
     )
 
 
+def list_organizations_command(user_id: UserId) -> ListOrganizationsCommand:
+    return ListOrganizationsCommand(user_id=user_id)
+
+
 def get_organization_command(organization_id: OrganizationId) -> GetOrganizationCommand:
     return GetOrganizationCommand(organization_id=organization_id)
 
@@ -41,6 +47,10 @@ def update_organization_request_to_command(
         organization_id=organization_id,
         name=payload.name,
     )
+
+
+def delete_organization_command(organization_id: OrganizationId) -> DeleteOrganizationCommand:
+    return DeleteOrganizationCommand(organization_id=organization_id)
 
 
 def suspend_organization_command(organization_id: OrganizationId) -> SuspendOrganizationCommand:
@@ -56,6 +66,10 @@ def organization_result_to_response(result: OrganizationResult) -> OrganizationR
         created_at=result.created_at,
         updated_at=result.updated_at,
     )
+
+
+def organization_results_to_response(results: list[OrganizationResult]) -> list[OrganizationResponse]:
+    return [organization_result_to_response(result) for result in results]
 
 
 def create_organization_result_to_response(
