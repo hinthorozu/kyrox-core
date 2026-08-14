@@ -21,6 +21,7 @@ class UserMapper:
             created_at=model.created_at,
             updated_at=model.updated_at,
             deleted_at=model.deleted_at,
+            must_change_password=model.must_change_password,
         )
 
     @staticmethod
@@ -33,6 +34,7 @@ class UserMapper:
             created_at=entity.created_at,
             updated_at=entity.updated_at,
             deleted_at=entity.deleted_at,
+            must_change_password=entity.must_change_password,
         )
 
     @staticmethod
@@ -42,3 +44,4 @@ class UserMapper:
         model.status = entity.status.value
         model.updated_at = entity.updated_at
         model.deleted_at = entity.deleted_at
+        model.must_change_password = entity.must_change_password
