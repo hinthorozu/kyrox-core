@@ -8,7 +8,7 @@ from app.modules.identity.domain.organization.enums.organization_status import O
 
 class CreateOrganizationRequest(BaseModel):
     name: str = Field(min_length=1)
-    slug: str = Field(min_length=1)
+    slug: str | None = Field(default=None, min_length=1)
 
 
 class UpdateOrganizationRequest(BaseModel):
