@@ -10,7 +10,10 @@ from app.modules.identity.api.authentication.dependencies import (
     get_user_repository,
 )
 from app.modules.identity.api.authorization.context import AuthorizationContext
-from app.modules.identity.api.authorization.guards import get_access_token_claims, require_permission
+from app.modules.identity.api.authorization.guards import (
+    get_password_change_complete_claims,
+    require_permission,
+)
 from app.modules.identity.api.membership.dependencies import (
     assert_organization_scope,
     get_accept_membership_invite_use_case,
@@ -220,7 +223,7 @@ def register_membership_invite(
 )
 def accept_membership_invite(
     payload: AcceptMembershipInviteRequest,
-    claims: AccessTokenClaims = Depends(get_access_token_claims),
+    claims: AccessTokenClaims = Depends(get_password_change_complete_claims),
     use_case: AcceptMembershipInviteUseCase = Depends(get_accept_membership_invite_use_case),
 ) -> AcceptMembershipInviteResponse:
     try:
