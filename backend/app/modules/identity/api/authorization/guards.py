@@ -68,9 +68,24 @@ def get_authorization_context(
     )
 
 
-def _is_super_admin(user_id: UUID, platform_user_reader: PlatformUserReader) -> bool:
+def is_super_admin(user_id: UUID, platform_user_reader: PlatformUserReader) -> bool:
+    """Platform-level god mode, independent of roles and permission rows."""
     snapshot = platform_user_reader.get_snapshot(UserId(user_id))
-    return bool(snapshot is not None and snapshot.is_super_admin)
+    return bool(
+        snapshot is not None
+        and snapshot.can_be_authorized()
+        and snapshot.is_super_admin
+    )
+
+
+def require_super_admin(
+    claims: AccessTokenClaims = Depends(get_access_token_claims),
+    platform_user_reader: PlatformUserReader = Depends(get_platform_user_reader),
+) -> AccessTokenClaims:
+    """Require the platform Super Admin flag; never consult RBAC permissions."""
+    if not is_super_admin(claims.sub.value, platform_user_reader):
+        raise AppException("Super admin required", status_code=status.HTTP_403_FORBIDDEN)
+    return claims
 
 
 def _assert_active_membership(
@@ -79,9 +94,8 @@ def _assert_active_membership(
     membership_repository: MembershipRepository,
     platform_user_reader: PlatformUserReader,
 ) -> None:
-    # Super Admin is a platform-level god-mode flag. It is intentionally
-    # independent from memberships, roles and permission rows.
-    if _is_super_admin(claims.sub.value, platform_user_reader):
+    # Super Admin is platform god mode and does not need organization membership.
+    if is_super_admin(claims.sub.value, platform_user_reader):
         return
 
     membership = membership_repository.get_by_user_and_organization(
@@ -123,13 +137,13 @@ def require_permission(
         platform_user_reader: PlatformUserReader = Depends(get_platform_user_reader),
         authorization_service: AuthorizationService = Depends(get_authorization_service),
     ) -> AuthorizationContext:
-        # IMPORTANT: Super Admin bypass happens BEFORE permission lookup.
-        # Therefore a brand-new module/endpoint may reference a permission code
-        # that has not yet been seeded into identity_permissions and Super Admin
-        # still receives access. Normal users continue through RBAC as usual.
-        if _is_super_admin(context.user_id, platform_user_reader):
+        # Super Admin bypass MUST happen before permission normalization/lookup.
+        # Missing, removed or not-yet-seeded DB permission rows cannot block it.
+        if is_super_admin(context.user_id, platform_user_reader):
             return context
 
+        # OrganizationAdmin bypass is implemented inside the permission checker
+        # before permission-row lookup and is limited to its own organization.
         try:
             authorization_service.require_permission(
                 CheckPermissionCommand(
