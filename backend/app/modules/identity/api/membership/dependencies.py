@@ -10,6 +10,7 @@ from app.db.session import get_db
 from app.modules.identity.api.authentication.dependencies import (
     get_clock,
     get_id_generator,
+    get_password_hasher,
     get_user_repository,
 )
 from app.modules.identity.api.authorization.context import (
@@ -20,6 +21,9 @@ from app.modules.identity.api.authorization.guards import require_permission
 from app.modules.identity.application.authentication.id_generator import IdGenerator
 from app.modules.identity.application.membership.accept_membership_invite import (
     AcceptMembershipInviteUseCase,
+)
+from app.modules.identity.application.membership.create_organization_user import (
+    CreateOrganizationUserUseCase,
 )
 from app.modules.identity.application.membership.invite_member import InviteMemberUseCase
 from app.modules.identity.application.membership.invite_token_issuer import InviteTokenIssuer
@@ -32,6 +36,7 @@ from app.modules.identity.application.membership.suspend_membership import (
     SuspendMembershipUseCase,
 )
 from app.modules.identity.domain.authentication.ports.clock import Clock
+from app.modules.identity.domain.authentication.ports.password_hasher import PasswordHasher
 from app.modules.identity.domain.authentication.ports.user_repository import UserRepository
 from app.modules.identity.domain.authorization.ports.organization_role_repository import (
     OrganizationRoleRepository,
@@ -130,6 +135,26 @@ def get_list_organization_memberships_use_case(
     return ListOrganizationMembershipsUseCase(
         organization_repository=organization_repository,
         membership_repository=membership_repository,
+    )
+
+
+def get_create_organization_user_use_case(
+    organization_repository: OrganizationRepository = Depends(get_organization_repository),
+    user_repository: UserRepository = Depends(get_user_repository),
+    membership_repository: MembershipRepository = Depends(get_membership_repository),
+    role_assigner: MembershipRoleAssigner = Depends(get_membership_role_assigner),
+    password_hasher: PasswordHasher = Depends(get_password_hasher),
+    clock: Clock = Depends(get_clock),
+    id_generator: IdGenerator = Depends(get_id_generator),
+) -> CreateOrganizationUserUseCase:
+    return CreateOrganizationUserUseCase(
+        organization_repository=organization_repository,
+        user_repository=user_repository,
+        membership_repository=membership_repository,
+        role_assigner=role_assigner,
+        password_hasher=password_hasher,
+        clock=clock,
+        id_generator=id_generator,
     )
 
 
