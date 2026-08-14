@@ -24,6 +24,10 @@ class OrganizationResponse(BaseModel):
     updated_at: datetime
 
 
+class OrganizationListResponse(BaseModel):
+    items: list[OrganizationResponse]
+
+
 class CreateOrganizationResponse(BaseModel):
     organization: OrganizationResponse
     membership_id: UUID
