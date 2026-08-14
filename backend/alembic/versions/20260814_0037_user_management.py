@@ -9,6 +9,7 @@ Adds forced-password-change state and reusable identity user-management permissi
 
 from __future__ import annotations
 
+import uuid
 from typing import Sequence, Union
 
 import sqlalchemy as sa
@@ -20,11 +21,11 @@ branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
 PERMISSIONS = (
-    ("identity.users.read", "Kullanıcıları görüntüle"),
-    ("identity.users.create", "Kullanıcı oluştur"),
-    ("identity.users.update", "Kullanıcı durumunu ve rollerini yönet"),
-    ("identity.roles.read", "Rolleri ve izinleri görüntüle"),
-    ("identity.roles.update", "Rol izinlerini yönet"),
+    ("identity.users.read", "View organization users"),
+    ("identity.users.create", "Create organization users"),
+    ("identity.users.update", "Manage organization users and roles"),
+    ("identity.roles.read", "View roles and permissions"),
+    ("identity.roles.update", "Manage role permissions"),
 )
 
 
@@ -43,30 +44,39 @@ def upgrade() -> None:
     group_id = connection.execute(
         sa.text(
             "SELECT id FROM identity_permission_groups "
-            "WHERE slug = 'identity' AND deleted_at IS NULL LIMIT 1"
+            "WHERE code = 'identity' LIMIT 1"
         )
-    ).scalar_one_or_none()
+    ).scalar_one()
 
-    for code, name in PERMISSIONS:
+    for code, description in PERMISSIONS:
         connection.execute(
             sa.text(
                 """
                 INSERT INTO identity_permissions
-                    (id, code, name, group_id, created_at, updated_at)
-                VALUES
-                    (gen_random_uuid(), :code, :name, :group_id, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-                ON CONFLICT (code) DO NOTHING
+                    (id, group_id, code, description, is_system, created_at, updated_at)
+                SELECT
+                    :id, :group_id, :code, :description, :is_system,
+                    CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+                WHERE NOT EXISTS (
+                    SELECT 1 FROM identity_permissions WHERE code = :code
+                )
                 """
             ),
-            {"code": code, "name": name, "group_id": group_id},
+            {
+                "id": str(uuid.uuid4()),
+                "group_id": group_id,
+                "code": code,
+                "description": description,
+                "is_system": True,
+            },
         )
 
 
 def downgrade() -> None:
     connection = op.get_bind()
-    codes = [code for code, _ in PERMISSIONS]
-    connection.execute(
-        sa.text("DELETE FROM identity_permissions WHERE code = ANY(:codes)"),
-        {"codes": codes},
-    )
+    for code, _ in PERMISSIONS:
+        connection.execute(
+            sa.text("DELETE FROM identity_permissions WHERE code = :code"),
+            {"code": code},
+        )
     op.drop_column("identity_users", "must_change_password")
