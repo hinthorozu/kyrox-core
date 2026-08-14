@@ -79,10 +79,10 @@ def test_membership_role_assigner_factory_is_defined_only_in_membership_dependen
     assert definitions == [expected]
 
 
-def test_organization_dependencies_import_role_assigner_from_membership() -> None:
+def test_organization_creation_does_not_import_membership_role_assigner() -> None:
     path = _api_root() / "organization" / "dependencies.py"
     source = path.read_text(encoding="utf-8")
 
     assert "def get_membership_role_assigner" not in source
     assert "app.modules.identity.api.membership.dependencies" in source
-    assert "get_membership_role_assigner" in source
+    assert "get_membership_role_assigner" not in source

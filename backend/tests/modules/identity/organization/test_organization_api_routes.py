@@ -4,6 +4,7 @@ from pathlib import Path
 
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
+from app.modules.identity.infrastructure.persistence.models import UserModel
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from identity_api_test_helpers import (
@@ -13,8 +14,12 @@ from identity_api_test_helpers import (
 )
 
 
-def test_create_organization_returns_membership(client: TestClient, db_session: Session) -> None:
+def test_super_admin_creates_organization_without_membership(client: TestClient, db_session: Session) -> None:
     user = seed_authenticated_user(db_session)
+    user_model = db_session.get(UserModel, user.id.value)
+    assert user_model is not None
+    user_model.is_super_admin = True
+    db_session.commit()
     token = login(client, user.email)
     slug = f"new-org-{uuid.uuid4().hex[:8]}"
 
@@ -28,7 +33,7 @@ def test_create_organization_returns_membership(client: TestClient, db_session: 
     body = response.json()
     assert body["organization"]["slug"] == slug
     assert body["organization"]["status"] == "active"
-    assert body["membership_id"]
+    assert body["membership_id"] is None
 
 
 def test_get_organization_requires_permission(client: TestClient, db_session: Session) -> None:

@@ -2,7 +2,7 @@ from datetime import UTC, datetime
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Response, status
-from sqlalchemy import and_, func, or_, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from app.core.exceptions import AppException
@@ -23,8 +23,9 @@ from app.modules.identity.api.user_management.schemas import (
 from app.modules.identity.domain.authentication.value_objects.security.access_token import AccessTokenClaims
 from app.modules.identity.infrastructure.authentication.security import Argon2idPasswordHasher
 from app.modules.identity.infrastructure.authorization.persistence.models import (
-    OrganizationRoleModel,
+    PermissionModel,
     RoleModel,
+    RolePermissionModel,
     UserRoleModel,
 )
 from app.modules.identity.infrastructure.membership.persistence.models import MembershipModel
@@ -61,49 +62,49 @@ def _resolve_role(
     db: Session,
     organization_id: UUID,
     role_id: UUID,
-) -> tuple[RoleModel, OrganizationRoleModel]:
+) -> RoleModel:
     role = db.get(RoleModel, role_id)
-    if role is None or role.deleted_at is not None or role.scope != "organization":
+    if (
+        role is None
+        or role.deleted_at is not None
+        or role.scope != "organization"
+        or not role.is_assignable
+        or role.role_kind == "template"
+        or (role.organization_id is not None and role.organization_id != organization_id)
+    ):
         raise AppException(
             "Role is not available for this organization",
             status_code=status.HTTP_400_BAD_REQUEST,
         )
 
-    organization_role = db.scalars(
-        select(OrganizationRoleModel).where(
-            OrganizationRoleModel.organization_id == organization_id,
-            OrganizationRoleModel.role_id == role_id,
-            OrganizationRoleModel.deleted_at.is_(None),
-            OrganizationRoleModel.status == "active",
-        )
-    ).first()
-    if organization_role is not None:
-        return role, organization_role
+    return role
 
-    # System roles are global defaults managed by Super Admin. They are
-    # assignable in every organization and must never depend on per-organization
-    # provisioning. Keep the existing organization-role row only as the current
-    # persistence link required by identity_user_roles.
-    if role.is_system:
-        now = _now()
-        organization_role = OrganizationRoleModel(
-            organization_id=organization_id,
-            role_id=role.id,
-            status="active",
-            is_default=True,
-            created_at=now,
-            updated_at=now,
-            deleted_at=None,
-        )
-        db.add(organization_role)
-        db.flush()
-        return role, organization_role
 
-    # Custom roles belong to the organization that created/bound them.
-    raise AppException(
-        "Role is not available for this organization",
-        status_code=status.HTTP_400_BAD_REQUEST,
+def _assert_can_assign_role(
+    db: Session,
+    context: AuthorizationContext,
+    role: RoleModel,
+) -> None:
+    if context.is_super_admin or not role.is_protected:
+        return
+    allowed = db.scalar(
+        select(PermissionModel.id)
+        .join(RolePermissionModel, RolePermissionModel.permission_id == PermissionModel.id)
+        .join(UserRoleModel, UserRoleModel.role_id == RolePermissionModel.role_id)
+        .where(
+            UserRoleModel.user_id == context.user_id,
+            UserRoleModel.organization_id == context.organization_id,
+            UserRoleModel.status == "active",
+            UserRoleModel.revoked_at.is_(None),
+            PermissionModel.code == "identity.roles.assign_protected",
+            PermissionModel.lifecycle_state == "active",
+        )
     )
+    if allowed is None:
+        raise AppException(
+            "Protected role assignment is not allowed",
+            status_code=status.HTTP_403_FORBIDDEN,
+        )
 
 
 def _active_role_for_user(
@@ -113,14 +114,12 @@ def _active_role_for_user(
 ) -> AssignableRoleResponse | None:
     stmt = (
         select(RoleModel)
-        .join(OrganizationRoleModel, OrganizationRoleModel.role_id == RoleModel.id)
-        .join(UserRoleModel, UserRoleModel.organization_role_id == OrganizationRoleModel.id)
+        .join(UserRoleModel, UserRoleModel.role_id == RoleModel.id)
         .where(
             UserRoleModel.user_id == user_id,
             UserRoleModel.organization_id == organization_id,
             UserRoleModel.status == "active",
             UserRoleModel.revoked_at.is_(None),
-            OrganizationRoleModel.deleted_at.is_(None),
             RoleModel.deleted_at.is_(None),
         )
         .order_by(UserRoleModel.assigned_at.desc())
@@ -179,7 +178,7 @@ def _assign_role(
     role_id: UUID,
     assigned_by: UUID,
 ) -> None:
-    _, organization_role = _resolve_role(db, organization_id, role_id)
+    role = _resolve_role(db, organization_id, role_id)
     now = _now()
     active_roles = db.scalars(
         select(UserRoleModel).where(
@@ -190,7 +189,7 @@ def _assign_role(
         )
     ).all()
     for item in active_roles:
-        if item.organization_role_id == organization_role.id:
+        if item.role_id == role.id:
             return
         item.status = "revoked"
         item.revoked_at = now
@@ -199,7 +198,7 @@ def _assign_role(
         UserRoleModel(
             user_id=user_id,
             organization_id=organization_id,
-            organization_role_id=organization_role.id,
+            role_id=role.id,
             status="active",
             assigned_at=now,
             revoked_at=None,
@@ -263,21 +262,13 @@ def list_assignable_roles(
     assert_organization_scope(organization_id, context)
     stmt = (
         select(RoleModel)
-        .outerjoin(
-            OrganizationRoleModel,
-            and_(
-                OrganizationRoleModel.role_id == RoleModel.id,
-                OrganizationRoleModel.organization_id == organization_id,
-                OrganizationRoleModel.status == "active",
-                OrganizationRoleModel.deleted_at.is_(None),
-            ),
-        )
         .where(
             RoleModel.deleted_at.is_(None),
             RoleModel.scope == "organization",
+            RoleModel.is_assignable.is_(True),
             or_(
-                RoleModel.is_system.is_(True),
-                OrganizationRoleModel.id.is_not(None),
+                RoleModel.role_kind == "protected_global",
+                RoleModel.organization_id == organization_id,
             ),
         )
         .distinct()
@@ -376,7 +367,9 @@ def create_user(
     if existing is not None:
         raise AppException("User already exists", status_code=status.HTTP_409_CONFLICT)
 
-    _resolve_role(db, organization_id, payload.role_id)
+    if not payload.is_super_admin:
+        selected_role = _resolve_role(db, organization_id, payload.role_id)
+        _assert_can_assign_role(db, context, selected_role)
     now = _now()
     user = UserModel(
         email=email,
@@ -403,13 +396,14 @@ def create_user(
         )
     )
     db.flush()
-    _assign_role(
-        db,
-        organization_id=organization_id,
-        user_id=user.id,
-        role_id=payload.role_id,
-        assigned_by=context.user_id,
-    )
+    if not user.is_super_admin:
+        _assign_role(
+            db,
+            organization_id=organization_id,
+            user_id=user.id,
+            role_id=payload.role_id,
+            assigned_by=context.user_id,
+        )
     db.flush()
     return _to_response(db, organization_id, user, expose_super_admin=actor_is_super)
 
@@ -438,6 +432,7 @@ def update_user(
         raise AppException("User not found", status_code=status.HTTP_404_NOT_FOUND)
 
     actor_is_super = _actor_is_super_admin(db, context.user_id)
+    was_super_admin = user.is_super_admin
     if user.is_super_admin and not actor_is_super:
         raise AppException(
             "Only a Super Admin can modify a Super Admin",
@@ -445,6 +440,11 @@ def update_user(
         )
     if payload.is_super_admin is not None:
         _assert_super_admin_change_allowed(db, context, payload.is_super_admin)
+        if was_super_admin and not payload.is_super_admin and payload.role_id is None:
+            raise AppException(
+                "A role is required when removing Super Admin access",
+                status_code=status.HTTP_400_BAD_REQUEST,
+            )
 
     if payload.email is not None:
         email = payload.email.strip().lower()
@@ -466,7 +466,18 @@ def update_user(
         user.status = payload.status.value
     if payload.is_super_admin is not None:
         user.is_super_admin = payload.is_super_admin
-    if payload.role_id is not None:
+    if user.is_super_admin:
+        now = _now()
+        for item in db.scalars(select(UserRoleModel).where(
+            UserRoleModel.user_id == user_id,
+            UserRoleModel.status == "active",
+            UserRoleModel.revoked_at.is_(None),
+        )).all():
+            item.status = "revoked"
+            item.revoked_at = now
+    elif payload.role_id is not None:
+        selected_role = _resolve_role(db, organization_id, payload.role_id)
+        _assert_can_assign_role(db, context, selected_role)
         _assign_role(
             db,
             organization_id=organization_id,

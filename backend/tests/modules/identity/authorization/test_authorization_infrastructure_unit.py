@@ -5,7 +5,6 @@ import pytest
 from sqlalchemy.orm import Session
 
 from app.modules.identity.domain.authorization.entities import (
-    OrganizationRole,
     Permission,
     PermissionGroup,
     Role,
@@ -15,7 +14,6 @@ from app.modules.identity.domain.authorization.entities import (
 from app.modules.identity.domain.authorization.enums import AssignmentStatus, RoleScope
 from app.modules.identity.domain.authorization.value_objects.identity import (
     OrganizationId,
-    OrganizationRoleId,
     PermissionGroupId,
     PermissionId,
     RoleId,
@@ -28,9 +26,6 @@ from app.modules.identity.domain.authorization.value_objects.rbac import (
     PermissionModule,
     RoleSlug,
 )
-from app.modules.identity.infrastructure.authorization.persistence.mappers.organization_role_mapper import (
-    OrganizationRoleMapper,
-)
 from app.modules.identity.infrastructure.authorization.persistence.mappers.permission_group_mapper import (
     PermissionGroupMapper,
 )
@@ -40,9 +35,6 @@ from app.modules.identity.infrastructure.authorization.persistence.mappers.permi
 from app.modules.identity.infrastructure.authorization.persistence.mappers.role_mapper import RoleMapper
 from app.modules.identity.infrastructure.authorization.persistence.mappers.user_role_mapper import (
     UserRoleMapper,
-)
-from app.modules.identity.infrastructure.authorization.persistence.models.organization_role import (
-    OrganizationRoleModel,
 )
 from app.modules.identity.infrastructure.authorization.persistence.models.permission import PermissionModel
 from app.modules.identity.infrastructure.authorization.persistence.models.permission_group import (
@@ -107,28 +99,12 @@ def test_permission_mapper_roundtrip() -> None:
     assert restored.code.value == permission.code.value
 
 
-def test_organization_role_mapper_roundtrip() -> None:
-    org_role = OrganizationRole(
-        id=OrganizationRoleId(uuid.uuid4()),
-        organization_id=OrganizationId(uuid.uuid4()),
-        role_id=RoleId(uuid.uuid4()),
-        status=AssignmentStatus.ACTIVE,
-        is_default=False,
-        created_at=_now(),
-        updated_at=_now(),
-    )
-    model = OrganizationRoleMapper.to_model(org_role)
-    assert isinstance(model, OrganizationRoleModel)
-    restored = OrganizationRoleMapper.to_domain(model)
-    assert restored.organization_id.value == org_role.organization_id.value
-
-
 def test_user_role_mapper_roundtrip() -> None:
     user_role = UserRole(
         id=UserRoleId(uuid.uuid4()),
         user_id=UserId(uuid.uuid4()),
         organization_id=OrganizationId(uuid.uuid4()),
-        organization_role_id=OrganizationRoleId(uuid.uuid4()),
+        role_id=RoleId(uuid.uuid4()),
         status=AssignmentStatus.ACTIVE,
         assigned_at=_now(),
         assigned_by=UserId(uuid.uuid4()),

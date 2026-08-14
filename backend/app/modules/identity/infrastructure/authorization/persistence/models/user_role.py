@@ -27,9 +27,9 @@ class UserRoleModel(Base):
         ForeignKey("identity_organizations.id"),
         nullable=False,
     )
-    organization_role_id: Mapped[UUID] = mapped_column(
+    role_id: Mapped[UUID] = mapped_column(
         UUIDPrimaryKey,
-        ForeignKey("identity_organization_roles.id"),
+        ForeignKey("identity_roles.id"),
         nullable=False,
     )
     status: Mapped[str] = mapped_column(String(32), nullable=False)

@@ -7,7 +7,6 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from app.db.base import Base
 from app.modules.identity.domain.authorization.entities import (
-    OrganizationRole,
     Permission,
     PermissionGroup,
     Role,
@@ -17,7 +16,6 @@ from app.modules.identity.domain.authorization.entities import (
 from app.modules.identity.domain.authorization.enums import AssignmentStatus, RoleScope
 from app.modules.identity.domain.authorization.value_objects.identity import (
     OrganizationId,
-    OrganizationRoleId,
     PermissionGroupId,
     PermissionId,
     RoleId,
@@ -34,7 +32,6 @@ from app.modules.identity.domain.entities import Organization, User
 from app.modules.identity.domain.enums import OrganizationStatus, UserStatus
 from app.modules.identity.infrastructure.authorization.persistence import models as authz_models  # noqa: F401
 from app.modules.identity.infrastructure.authorization.repositories import (
-    SqlAlchemyOrganizationRoleRepository,
     SqlAlchemyPermissionGroupRepository,
     SqlAlchemyPermissionRepository,
     SqlAlchemyRolePermissionRepository,
@@ -66,7 +63,6 @@ def db_session() -> Session:
             authz_models.PermissionModel.__table__,
             authz_models.RoleModel.__table__,
             authz_models.RolePermissionModel.__table__,
-            authz_models.OrganizationRoleModel.__table__,
             authz_models.UserRoleModel.__table__,
         ],
     )
@@ -218,10 +214,9 @@ def test_sqlalchemy_role_permission_repository(db_session: Session) -> None:
     assert PermissionId(permission.id.value) in role_permission_repo.list_permission_ids_for_role(role.id)
 
 
-def test_sqlalchemy_organization_role_and_user_role_repositories(db_session: Session) -> None:
+def test_sqlalchemy_user_role_repository(db_session: Session) -> None:
     user, org = _seed_user_and_org(db_session)
     role_repo = SqlAlchemyRoleRepository(db_session)
-    org_role_repo = SqlAlchemyOrganizationRoleRepository(db_session)
     user_role_repo = SqlAlchemyUserRoleRepository(db_session)
 
     role = role_repo.add(
@@ -235,23 +230,12 @@ def test_sqlalchemy_organization_role_and_user_role_repositories(db_session: Ses
             updated_at=_now(),
         )
     )
-    org_role = org_role_repo.add(
-        OrganizationRole(
-            id=OrganizationRoleId(uuid.uuid4()),
-            organization_id=OrganizationId(org.id),
-            role_id=role.id,
-            status=AssignmentStatus.ACTIVE,
-            is_default=True,
-            created_at=_now(),
-            updated_at=_now(),
-        )
-    )
     user_role = user_role_repo.add(
         UserRole(
             id=UserRoleId(uuid.uuid4()),
             user_id=UserId(user.id),
             organization_id=OrganizationId(org.id),
-            organization_role_id=org_role.id,
+            role_id=role.id,
             status=AssignmentStatus.ACTIVE,
             assigned_at=_now(),
         )
@@ -279,7 +263,6 @@ def test_sqlalchemy_permission_checker_evaluates_user_role_graph(db_session: Ses
     group_repo = SqlAlchemyPermissionGroupRepository(db_session)
     permission_repo = SqlAlchemyPermissionRepository(db_session)
     role_permission_repo = SqlAlchemyRolePermissionRepository(db_session)
-    org_role_repo = SqlAlchemyOrganizationRoleRepository(db_session)
     user_role_repo = SqlAlchemyUserRoleRepository(db_session)
     checker = SqlAlchemyPermissionChecker(db_session)
 
@@ -319,23 +302,12 @@ def test_sqlalchemy_permission_checker_evaluates_user_role_graph(db_session: Ses
         )
     )
     role_permission_repo.grant(RolePermission(role_id=role.id, permission_id=permission.id))
-    org_role = org_role_repo.add(
-        OrganizationRole(
-            id=OrganizationRoleId(uuid.uuid4()),
-            organization_id=OrganizationId(org.id),
-            role_id=role.id,
-            status=AssignmentStatus.ACTIVE,
-            is_default=True,
-            created_at=_now(),
-            updated_at=_now(),
-        )
-    )
     user_role_repo.add(
         UserRole(
             id=UserRoleId(uuid.uuid4()),
             user_id=UserId(user.id),
             organization_id=OrganizationId(org.id),
-            organization_role_id=org_role.id,
+            role_id=role.id,
             status=AssignmentStatus.ACTIVE,
             assigned_at=_now(),
         )

@@ -4,14 +4,10 @@ from datetime import datetime
 from app.modules.identity.domain.authentication.entities.user import User
 from app.modules.identity.domain.authentication.value_objects.identity.user_id import UserId
 from app.modules.identity.domain.authentication.value_objects.security.email import Email
-from app.modules.identity.domain.authorization.entities.organization_role import OrganizationRole
 from app.modules.identity.domain.authorization.entities.role import Role
 from app.modules.identity.domain.authorization.entities.user_role import UserRole
 from app.modules.identity.domain.authorization.enums.role_scope import RoleScope
 from app.modules.identity.domain.authorization.value_objects.identity.organization_id import OrganizationId
-from app.modules.identity.domain.authorization.value_objects.identity.organization_role_id import (
-    OrganizationRoleId,
-)
 from app.modules.identity.domain.authorization.value_objects.identity.role_id import RoleId
 from app.modules.identity.domain.authorization.value_objects.identity.user_role_id import UserRoleId
 from app.modules.identity.domain.authorization.value_objects.rbac.role_slug import RoleSlug
@@ -238,48 +234,7 @@ class InMemoryRoleRepository:
 
 class InMemoryOrganizationRoleRepository:
     def __init__(self) -> None:
-        self.items: list[OrganizationRole] = []
-
-    def add(self, organization_role: OrganizationRole) -> OrganizationRole:
-        self.items.append(organization_role)
-        return organization_role
-
-    def update(self, organization_role: OrganizationRole) -> OrganizationRole:
-        return organization_role
-
-    def remove(self, organization_role_id: OrganizationRoleId) -> None:
-        self.items = [
-            item for item in self.items if item.id.value != organization_role_id.value
-        ]
-
-    def get_by_id(self, organization_role_id: OrganizationRoleId) -> OrganizationRole | None:
-        for item in self.items:
-            if item.id.value == organization_role_id.value:
-                return item
-        return None
-
-    def get_by_organization_and_role(
-        self,
-        organization_id: OrganizationId,
-        role_id: RoleId,
-    ) -> OrganizationRole | None:
-        for item in self.items:
-            if (
-                item.organization_id.value == organization_id.value
-                and item.role_id.value == role_id.value
-            ):
-                return item
-        return None
-
-    def list_active_by_organization(
-        self,
-        organization_id: OrganizationId,
-    ) -> list[OrganizationRole]:
-        return [
-            item
-            for item in self.items
-            if item.organization_id.value == organization_id.value and item.is_active()
-        ]
+        self.items: list[object] = []
 
 
 class InMemoryUserRoleRepository:

@@ -12,7 +12,6 @@ from app.modules.identity.domain.authorization.exceptions import (
 )
 from app.modules.identity.domain.authorization.value_objects.identity import (
     OrganizationId,
-    OrganizationRoleId,
     PermissionGroupId,
     PermissionId,
     RoleId,
@@ -137,7 +136,6 @@ def test_all_identity_value_objects_construct_with_uuid() -> None:
     value = uuid.uuid4()
     assert PermissionId(value).value == value
     assert PermissionGroupId(value).value == value
-    assert OrganizationRoleId(value).value == value
     assert UserRoleId(value).value == value
     assert OrganizationId(value).value == value
     assert UserId(value).value == value

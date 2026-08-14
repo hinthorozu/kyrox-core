@@ -13,7 +13,17 @@ def test_identity_role_table_metadata() -> None:
     assert "scope" in column_names
     assert "slug" in column_names
     assert "is_system" in column_names
-    assert "organization_id" not in column_names
+    assert {
+        "role_kind",
+        "organization_id",
+        "source_template_role_id",
+        "template_version",
+        "source_template_version",
+        "permissions_customized",
+        "is_assignable",
+        "is_protected",
+        "auto_include_new_permissions",
+    }.issubset(column_names)
 
 
 def test_identity_permission_table_metadata() -> None:
@@ -27,6 +37,11 @@ def test_identity_permission_table_metadata() -> None:
         "code",
         "description",
         "is_system",
+        "lifecycle_state",
+        "is_assignable",
+        "lifecycle_reason",
+        "lifecycle_changed_at",
+        "lifecycle_changed_by",
         "created_at",
         "updated_at",
     }

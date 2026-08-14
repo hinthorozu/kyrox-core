@@ -6,9 +6,7 @@ from app.modules.identity.domain.authorization.exceptions import InvalidRoleErro
 from app.modules.identity.domain.authorization.value_objects.identity.organization_id import (
     OrganizationId,
 )
-from app.modules.identity.domain.authorization.value_objects.identity.organization_role_id import (
-    OrganizationRoleId,
-)
+from app.modules.identity.domain.authorization.value_objects.identity.role_id import RoleId
 from app.modules.identity.domain.authorization.value_objects.identity.user_id import UserId
 from app.modules.identity.domain.authorization.value_objects.identity.user_role_id import UserRoleId
 
@@ -18,7 +16,7 @@ class UserRole:
     id: UserRoleId
     user_id: UserId
     organization_id: OrganizationId
-    organization_role_id: OrganizationRoleId
+    role_id: RoleId
     status: AssignmentStatus
     assigned_at: datetime
     revoked_at: datetime | None = None

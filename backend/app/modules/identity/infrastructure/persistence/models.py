@@ -18,7 +18,6 @@ from app.modules.identity.infrastructure.authentication.persistence.models.refre
 )
 from app.modules.identity.infrastructure.authentication.persistence.models.session import SessionModel
 from app.modules.identity.infrastructure.authorization.persistence.models import (
-    OrganizationRoleModel,
     PermissionGroupModel,
     PermissionModel,
     RoleModel,

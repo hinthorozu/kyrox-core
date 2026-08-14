@@ -1,6 +1,3 @@
-from app.modules.identity.infrastructure.authorization.repositories.sqlalchemy_organization_role_repository import (
-    SqlAlchemyOrganizationRoleRepository,
-)
 from app.modules.identity.infrastructure.authorization.repositories.sqlalchemy_permission_group_repository import (
     SqlAlchemyPermissionGroupRepository,
 )
@@ -18,7 +15,6 @@ from app.modules.identity.infrastructure.authorization.repositories.sqlalchemy_u
 )
 
 __all__ = [
-    "SqlAlchemyOrganizationRoleRepository",
     "SqlAlchemyPermissionGroupRepository",
     "SqlAlchemyPermissionRepository",
     "SqlAlchemyRolePermissionRepository",

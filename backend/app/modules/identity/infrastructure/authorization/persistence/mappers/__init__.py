@@ -1,6 +1,3 @@
-from app.modules.identity.infrastructure.authorization.persistence.mappers.organization_role_mapper import (
-    OrganizationRoleMapper,
-)
 from app.modules.identity.infrastructure.authorization.persistence.mappers.permission_group_mapper import (
     PermissionGroupMapper,
 )
@@ -13,7 +10,6 @@ from app.modules.identity.infrastructure.authorization.persistence.mappers.user_
 )
 
 __all__ = [
-    "OrganizationRoleMapper",
     "PermissionGroupMapper",
     "PermissionMapper",
     "RoleMapper",

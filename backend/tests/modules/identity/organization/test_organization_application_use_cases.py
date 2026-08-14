@@ -36,6 +36,8 @@ from app.modules.identity.domain.authorization.enums.role_scope import RoleScope
 from app.modules.identity.domain.authorization.value_objects.identity.role_id import RoleId
 from app.modules.identity.domain.authorization.value_objects.rbac.role_slug import RoleSlug
 from app.modules.identity.domain.membership.enums.membership_status import MembershipStatus
+from app.modules.identity.domain.membership.entities.membership import Membership
+from app.modules.identity.domain.membership.value_objects.identity.membership_id import MembershipId
 from app.modules.identity.domain.membership.exceptions import DuplicateMembershipError
 from app.modules.identity.domain.membership.ports.invite_token_service import InviteTokenService
 from app.modules.identity.domain.membership.value_objects.invite.invite_token_hash import InviteTokenHash
@@ -112,14 +114,13 @@ def _build_role_assigner(
 ) -> MembershipRoleAssigner:
     return MembershipRoleAssigner(
         role_repository=role_repo,
-        organization_role_repository=org_role_repo,
         user_role_repository=user_role_repo,
         clock=clock,
         id_generator=id_generator,
     )
 
 
-def test_create_organization_use_case_creates_org_membership_and_owner_role() -> None:
+def test_create_organization_use_case_creates_org_without_super_admin_membership() -> None:
     now = _now()
     clock = FixedClock(now)
     ids = SequenceIdGenerator([uuid.uuid4(), uuid.uuid4(), uuid.uuid4(), uuid.uuid4()])
@@ -134,15 +135,8 @@ def test_create_organization_use_case_creates_org_membership_and_owner_role() ->
 
     use_case = CreateOrganizationUseCase(
         organization_repository=org_repo,
-        membership_repository=membership_repo,
         user_repository=user_repo,
-        role_assigner=_build_role_assigner(
-            role_repo=role_repo,
-            org_role_repo=org_role_repo,
-            user_role_repo=user_role_repo,
-            clock=clock,
-            id_generator=ids,
-        ),
+        role_repository=role_repo,
         clock=clock,
         id_generator=ids,
     )
@@ -158,9 +152,8 @@ def test_create_organization_use_case_creates_org_membership_and_owner_role() ->
     assert result.organization.name == "Acme Corp"
     assert result.organization.slug == "acme-corp"
     assert result.organization.status is OrganizationStatus.ACTIVE
-    assert len(membership_repo.items) == 1
-    assert membership_repo.items[0].status is MembershipStatus.ACTIVE
-    assert len(user_role_repo.items) == 1
+    assert membership_repo.items == []
+    assert user_role_repo.items == []
 
 
 def test_create_organization_rejects_duplicate_slug() -> None:
@@ -173,15 +166,8 @@ def test_create_organization_rejects_duplicate_slug() -> None:
 
     use_case = CreateOrganizationUseCase(
         organization_repository=org_repo,
-        membership_repository=InMemoryMembershipRepository(),
         user_repository=InMemoryUserRepository([owner]),
-        role_assigner=_build_role_assigner(
-            role_repo=InMemoryRoleRepository(),
-            org_role_repo=InMemoryOrganizationRoleRepository(),
-            user_role_repo=InMemoryUserRoleRepository(),
-            clock=clock,
-            id_generator=ids,
-        ),
+        role_repository=InMemoryRoleRepository(),
         clock=clock,
         id_generator=ids,
     )
@@ -230,9 +216,8 @@ def test_invite_and_accept_membership_flow() -> None:
 
     create_org = CreateOrganizationUseCase(
         organization_repository=org_repo,
-        membership_repository=membership_repo,
         user_repository=user_repo,
-        role_assigner=role_assigner,
+        role_repository=role_repo,
         clock=clock,
         id_generator=ids,
     )
@@ -279,7 +264,7 @@ def test_invite_and_accept_membership_flow() -> None:
 
     assert accept_result.membership.status is MembershipStatus.ACTIVE
     assert accept_result.organization_id == org_result.organization.organization_id
-    assert len(user_role_repo.items) == 2
+    assert len(user_role_repo.items) == 1
 
 
 def test_list_organization_memberships_returns_created_members() -> None:
@@ -295,15 +280,8 @@ def test_list_organization_memberships_returns_created_members() -> None:
 
     create_org = CreateOrganizationUseCase(
         organization_repository=org_repo,
-        membership_repository=membership_repo,
         user_repository=user_repo,
-        role_assigner=_build_role_assigner(
-            role_repo=role_repo,
-            org_role_repo=InMemoryOrganizationRoleRepository(),
-            user_role_repo=InMemoryUserRoleRepository(),
-            clock=clock,
-            id_generator=ids,
-        ),
+        role_repository=role_repo,
         clock=clock,
         id_generator=ids,
     )
@@ -321,8 +299,7 @@ def test_list_organization_memberships_returns_created_members() -> None:
         )
     )
 
-    assert len(listed.memberships) == 1
-    assert listed.memberships[0].user_id == owner_id
+    assert listed.memberships == []
 
 
 def test_invite_member_rejects_duplicate_pending_invite() -> None:
@@ -340,15 +317,8 @@ def test_invite_member_rejects_duplicate_pending_invite() -> None:
 
     create_org = CreateOrganizationUseCase(
         organization_repository=org_repo,
-        membership_repository=membership_repo,
         user_repository=user_repo,
-        role_assigner=_build_role_assigner(
-            role_repo=role_repo,
-            org_role_repo=InMemoryOrganizationRoleRepository(),
-            user_role_repo=InMemoryUserRoleRepository(),
-            clock=clock,
-            id_generator=ids,
-        ),
+        role_repository=role_repo,
         clock=clock,
         id_generator=ids,
     )
@@ -396,22 +366,25 @@ def test_suspend_and_remove_membership() -> None:
 
     create_org = CreateOrganizationUseCase(
         organization_repository=org_repo,
-        membership_repository=membership_repo,
         user_repository=user_repo,
-        role_assigner=_build_role_assigner(
-            role_repo=role_repo,
-            org_role_repo=InMemoryOrganizationRoleRepository(),
-            user_role_repo=InMemoryUserRoleRepository(),
-            clock=clock,
-            id_generator=ids,
-        ),
+        role_repository=role_repo,
         clock=clock,
         id_generator=ids,
     )
     org_result = create_org.execute(
         CreateOrganizationCommand(owner_user_id=owner_id, name="Acme", slug="acme")
     )
-    membership_id = org_result.membership_id
+    membership_id = MembershipId(uuid.uuid4())
+    membership_repo.add(Membership(
+        id=membership_id,
+        user_id=owner_id,
+        organization_id=org_result.organization.organization_id,
+        status=MembershipStatus.ACTIVE,
+        invited_at=None,
+        joined_at=now,
+        created_at=now,
+        updated_at=now,
+    ))
 
     suspend_use_case = SuspendMembershipUseCase(membership_repository=membership_repo, clock=clock)
     suspended = suspend_use_case.execute(SuspendMembershipCommand(membership_id=membership_id))

@@ -7,11 +7,10 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from app.db.base import Base
 from app.modules.identity.application.authorization import CheckPermissionCommand
-from app.modules.identity.domain.authorization.entities import OrganizationRole, Role
+from app.modules.identity.domain.authorization.entities import Role, RolePermission
 from app.modules.identity.domain.authorization.enums import AssignmentStatus, RoleScope
 from app.modules.identity.domain.authorization.value_objects.identity import (
     OrganizationId,
-    OrganizationRoleId,
     RoleId,
     UserId,
 )
@@ -19,6 +18,7 @@ from app.modules.identity.domain.authorization.value_objects.rbac import RoleSlu
 from app.modules.identity.domain.entities import Organization
 from app.modules.identity.domain.enums import OrganizationStatus, UserStatus
 from app.modules.identity.infrastructure.persistence import models as identity_models  # noqa: F401
+from app.modules.identity.infrastructure.authorization.persistence.models import RoleModel
 from authorization_test_helpers import build_authorization_service, seed_user_role_with_permission
 
 
@@ -67,20 +67,12 @@ class AuthorizationSeed:
         return self.seed.role_repo
 
     @property
-    def org_role_repo(self):
-        return self.seed.org_role_repo
-
-    @property
     def user_role_repo(self):
         return self.seed.user_role_repo
 
     @property
     def user_role(self):
         return self.seed.user_role
-
-    @property
-    def org_role(self):
-        return self.seed.org_role
 
     @property
     def role(self):
@@ -132,10 +124,9 @@ def test_checker_rejects_removed_user_role(db_session: Session) -> None:
 
 def test_checker_rejects_inactive_organization_role(db_session: Session) -> None:
     seed = AuthorizationSeed(db_session)
-    org_role = seed.org_role_repo.get_by_id(seed.org_role.id)
-    assert org_role is not None
-    org_role.status = AssignmentStatus.INACTIVE
-    seed.org_role_repo.update(org_role)
+    role = seed.db_session.get(RoleModel, seed.role.id.value)
+    assert role is not None
+    role.is_assignable = False
     seed.db_session.commit()
 
     seed.assert_has_permission(False)
@@ -172,20 +163,15 @@ def test_checker_rejects_wrong_organization_role(db_session: Session) -> None:
             updated_at=_now(),
         )
     )
-    foreign_org_role = seed.org_role_repo.add(
-        OrganizationRole(
-            id=OrganizationRoleId(uuid.uuid4()),
-            organization_id=OrganizationId(other_org.id),
-            role_id=foreign_role.id,
-            status=AssignmentStatus.ACTIVE,
-            is_default=False,
-            created_at=_now(),
-            updated_at=_now(),
-        )
+    foreign_role_model = seed.db_session.get(RoleModel, foreign_role.id.value)
+    assert foreign_role_model is not None
+    foreign_role_model.organization_id = other_org.id
+    seed.seed.role_permission_repo.grant(
+        RolePermission(role_id=foreign_role.id, permission_id=seed.permission.id)
     )
     user_role = seed.user_role_repo.get_by_id(seed.user_role.id)
     assert user_role is not None
-    user_role.organization_role_id = foreign_org_role.id
+    user_role.role_id = foreign_role.id
     seed.user_role_repo.update(user_role)
     seed.db_session.commit()
 

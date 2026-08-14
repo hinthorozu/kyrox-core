@@ -13,7 +13,6 @@ from app.modules.identity.domain.authentication.enums.user_status import UserSta
 from app.modules.identity.domain.authentication.value_objects.identity.user_id import UserId
 from app.modules.identity.domain.authentication.value_objects.security.email import Email
 from app.modules.identity.domain.authorization.entities import (
-    OrganizationRole,
     Permission,
     PermissionGroup,
     RolePermission,
@@ -23,7 +22,6 @@ from app.modules.identity.domain.authorization.enums.assignment_status import As
 from app.modules.identity.domain.authorization.enums.role_scope import RoleScope
 from app.modules.identity.domain.authorization.value_objects.identity import (
     OrganizationId,
-    OrganizationRoleId,
     PermissionGroupId,
     PermissionId,
     RoleId,
@@ -46,7 +44,6 @@ from app.modules.identity.infrastructure.authentication.clock import UtcClock
 from app.modules.identity.infrastructure.authentication.repositories import SqlAlchemyUserRepository
 from app.modules.identity.infrastructure.authentication.security import Argon2idPasswordHasher
 from app.modules.identity.infrastructure.authorization.repositories import (
-    SqlAlchemyOrganizationRoleRepository,
     SqlAlchemyPermissionGroupRepository,
     SqlAlchemyPermissionRepository,
     SqlAlchemyRolePermissionRepository,
@@ -70,7 +67,6 @@ def seed_user_with_notification_permissions(
     group_repo = SqlAlchemyPermissionGroupRepository(db_session)
     permission_repo = SqlAlchemyPermissionRepository(db_session)
     role_permission_repo = SqlAlchemyRolePermissionRepository(db_session)
-    org_role_repo = SqlAlchemyOrganizationRoleRepository(db_session)
     user_role_repo = SqlAlchemyUserRoleRepository(db_session)
 
     clock = UtcClock()
@@ -123,23 +119,12 @@ def seed_user_with_notification_permissions(
             )
         )
         role_permission_repo.grant(RolePermission(role_id=role.id, permission_id=permission.id))
-    org_role = org_role_repo.add(
-        OrganizationRole(
-            id=OrganizationRoleId(uuid.uuid4()),
-            organization_id=OrganizationId(org.id.value),
-            role_id=role.id,
-            status=AssignmentStatus.ACTIVE,
-            is_default=True,
-            created_at=now,
-            updated_at=now,
-        )
-    )
     user_role_repo.add(
         UserRole(
             id=UserRoleId(uuid.uuid4()),
             user_id=UserId(user.id.value),
             organization_id=OrganizationId(org.id.value),
-            organization_role_id=org_role.id,
+            role_id=role.id,
             status=AssignmentStatus.ACTIVE,
             assigned_at=now,
         )

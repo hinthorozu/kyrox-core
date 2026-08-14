@@ -1,7 +1,7 @@
 from datetime import datetime
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from app.modules.identity.domain.authentication.enums.user_status import UserStatus
 
@@ -9,9 +9,15 @@ from app.modules.identity.domain.authentication.enums.user_status import UserSta
 class ManualUserCreateRequest(BaseModel):
     email: str = Field(min_length=3, max_length=320)
     password: str = Field(min_length=1)
-    role_id: UUID
+    role_id: UUID | None = None
     status: UserStatus = UserStatus.ACTIVE
     is_super_admin: bool = False
+
+    @model_validator(mode="after")
+    def require_role_for_organization_user(self) -> "ManualUserCreateRequest":
+        if not self.is_super_admin and self.role_id is None:
+            raise ValueError("role_id is required for non-Super-Admin users")
+        return self
 
 
 class ManualUserUpdateRequest(BaseModel):

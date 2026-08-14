@@ -10,6 +10,7 @@ from app.modules.identity.api.authorization.routes import router as identity_aut
 from app.modules.identity.api.membership.routes import router as identity_membership_router
 from app.modules.identity.api.organization.routes import router as identity_organization_router
 from app.modules.identity.api.user_management.routes import router as identity_user_management_router
+from app.modules.identity.api.role_management.routes import router as identity_role_management_router
 
 api_v1_router = APIRouter()
 api_v1_router.include_router(health.router, tags=["health"])
@@ -17,6 +18,7 @@ api_v1_router.include_router(identity_auth_router)
 api_v1_router.include_router(identity_organization_router)
 api_v1_router.include_router(identity_membership_router)
 api_v1_router.include_router(identity_user_management_router)
+api_v1_router.include_router(identity_role_management_router)
 api_v1_router.include_router(identity_authorization_router)
 api_v1_router.include_router(audit_router)
 api_v1_router.include_router(settings_router)

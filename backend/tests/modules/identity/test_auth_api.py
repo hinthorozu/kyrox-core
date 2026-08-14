@@ -81,7 +81,7 @@ def test_auth_login_success(client: TestClient, db_session: Session) -> None:
     assert response.status_code == 200
     body = response.json()
     assert body["token_type"] == "bearer"
-    assert body["expires_in"] == 900
+    assert body["expires_in"] == 15 * 24 * 60 * 60
     assert body["access_token"]
     assert body["refresh_token"]
 

@@ -8,9 +8,6 @@ from app.modules.identity.domain.authorization.value_objects.identity.organizati
 from app.modules.identity.domain.authorization.value_objects.identity.user_id import UserId
 from app.modules.identity.domain.authorization.value_objects.rbac.permission_code import PermissionCode
 from app.modules.identity.domain.enums import OrganizationStatus
-from app.modules.identity.infrastructure.authorization.persistence.models.organization_role import (
-    OrganizationRoleModel,
-)
 from app.modules.identity.infrastructure.authorization.persistence.models.permission import PermissionModel
 from app.modules.identity.infrastructure.authorization.persistence.models.role import RoleModel
 from app.modules.identity.infrastructure.authorization.persistence.models.role_permission import (
@@ -44,21 +41,20 @@ class SqlAlchemyPermissionChecker:
                 RolePermissionModel.permission_id == PermissionModel.id,
             )
             .join(RoleModel, RoleModel.id == RolePermissionModel.role_id)
-            .join(OrganizationRoleModel, OrganizationRoleModel.role_id == RoleModel.id)
-            .join(UserRoleModel, UserRoleModel.organization_role_id == OrganizationRoleModel.id)
+            .join(UserRoleModel, UserRoleModel.role_id == RoleModel.id)
             .join(OrganizationModel, OrganizationModel.id == UserRoleModel.organization_id)
             .where(
                 UserRoleModel.user_id == user_id.value,
                 UserRoleModel.organization_id == organization_id.value,
                 UserRoleModel.status == AssignmentStatus.ACTIVE.value,
                 UserRoleModel.revoked_at.is_(None),
-                OrganizationRoleModel.organization_id == organization_id.value,
-                OrganizationRoleModel.status == AssignmentStatus.ACTIVE.value,
-                OrganizationRoleModel.deleted_at.is_(None),
                 RoleModel.deleted_at.is_(None),
+                RoleModel.is_assignable.is_(True),
+                (RoleModel.organization_id.is_(None) | (RoleModel.organization_id == organization_id.value)),
                 OrganizationModel.status == OrganizationStatus.ACTIVE.value,
                 OrganizationModel.deleted_at.is_(None),
                 PermissionModel.code == permission_code.value,
+                PermissionModel.lifecycle_state == "active",
             )
         )
         return self._session.scalars(stmt).first() is not None

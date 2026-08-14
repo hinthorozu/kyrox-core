@@ -33,9 +33,6 @@ from app.modules.identity.application.membership.suspend_membership import (
 )
 from app.modules.identity.domain.authentication.ports.clock import Clock
 from app.modules.identity.domain.authentication.ports.user_repository import UserRepository
-from app.modules.identity.domain.authorization.ports.organization_role_repository import (
-    OrganizationRoleRepository,
-)
 from app.modules.identity.domain.authorization.ports.role_repository import RoleRepository
 from app.modules.identity.domain.authorization.ports.user_role_repository import UserRoleRepository
 from app.modules.identity.api.membership.error_mapping import map_membership_error
@@ -48,7 +45,6 @@ from app.modules.identity.domain.membership.ports.membership_repository import M
 from app.modules.identity.domain.membership.value_objects.identity.membership_id import MembershipId
 from app.modules.identity.domain.organization.ports.organization_repository import OrganizationRepository
 from app.modules.identity.infrastructure.authorization.repositories import (
-    SqlAlchemyOrganizationRoleRepository,
     SqlAlchemyRoleRepository,
     SqlAlchemyUserRoleRepository,
 )
@@ -86,26 +82,18 @@ def get_role_repository(db: DbSession = Depends(get_db)) -> RoleRepository:
     return SqlAlchemyRoleRepository(db)
 
 
-def get_organization_role_repository(
-    db: DbSession = Depends(get_db),
-) -> OrganizationRoleRepository:
-    return SqlAlchemyOrganizationRoleRepository(db)
-
-
 def get_user_role_repository(db: DbSession = Depends(get_db)) -> UserRoleRepository:
     return SqlAlchemyUserRoleRepository(db)
 
 
 def get_membership_role_assigner(
     role_repository: RoleRepository = Depends(get_role_repository),
-    organization_role_repository: OrganizationRoleRepository = Depends(get_organization_role_repository),
     user_role_repository: UserRoleRepository = Depends(get_user_role_repository),
     clock: Clock = Depends(get_clock),
     id_generator: IdGenerator = Depends(get_id_generator),
 ) -> MembershipRoleAssigner:
     return MembershipRoleAssigner(
         role_repository=role_repository,
-        organization_role_repository=organization_role_repository,
         user_role_repository=user_role_repository,
         clock=clock,
         id_generator=id_generator,

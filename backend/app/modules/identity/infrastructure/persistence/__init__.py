@@ -1,7 +1,6 @@
 """Identity persistence models and mappers."""
 
 from app.modules.identity.infrastructure.authorization.persistence.models import (
-    OrganizationRoleModel,
     PermissionGroupModel,
     PermissionModel,
     RoleModel,
@@ -19,7 +18,6 @@ from app.modules.identity.infrastructure.persistence.models import (
 __all__ = [
     "MembershipModel",
     "OrganizationModel",
-    "OrganizationRoleModel",
     "PermissionGroupModel",
     "PermissionModel",
     "RefreshTokenModel",

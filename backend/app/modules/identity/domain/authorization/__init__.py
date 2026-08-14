@@ -1,5 +1,4 @@
 from app.modules.identity.domain.authorization.entities import (
-    OrganizationRole,
     Permission,
     PermissionGroup,
     Role,
@@ -18,7 +17,6 @@ from app.modules.identity.domain.authorization.exceptions import (
     PermissionDeniedError,
 )
 from app.modules.identity.domain.authorization.ports import (
-    OrganizationRoleRepository,
     PermissionChecker,
     PermissionGroupRepository,
     PermissionRepository,
@@ -29,7 +27,6 @@ from app.modules.identity.domain.authorization.ports import (
 )
 from app.modules.identity.domain.authorization.value_objects import (
     OrganizationId,
-    OrganizationRoleId,
     PermissionCode,
     PermissionGroupCode,
     PermissionGroupId,
@@ -48,9 +45,6 @@ __all__ = [
     "InvalidPermissionError",
     "InvalidRoleError",
     "OrganizationId",
-    "OrganizationRole",
-    "OrganizationRoleId",
-    "OrganizationRoleRepository",
     "OrganizationStatus",
     "Permission",
     "PermissionChecker",

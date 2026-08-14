@@ -8,14 +8,12 @@ INFRASTRUCTURE_FILES = (
     "repositories/sqlalchemy_permission_group_repository.py",
     "repositories/sqlalchemy_permission_repository.py",
     "repositories/sqlalchemy_role_permission_repository.py",
-    "repositories/sqlalchemy_organization_role_repository.py",
     "repositories/sqlalchemy_user_role_repository.py",
     "services/sqlalchemy_permission_checker.py",
     "services/sqlalchemy_platform_user_reader.py",
     "persistence/mappers/role_mapper.py",
     "persistence/mappers/permission_group_mapper.py",
     "persistence/mappers/permission_mapper.py",
-    "persistence/mappers/organization_role_mapper.py",
     "persistence/mappers/user_role_mapper.py",
 )
 

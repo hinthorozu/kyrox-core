@@ -1,6 +1,3 @@
-from app.modules.identity.domain.authorization.ports.organization_role_repository import (
-    OrganizationRoleRepository,
-)
 from app.modules.identity.domain.authorization.ports.permission_checker import PermissionChecker
 from app.modules.identity.domain.authorization.ports.permission_repository import (
     PermissionGroupRepository,
@@ -14,7 +11,6 @@ from app.modules.identity.domain.authorization.ports.role_repository import Role
 from app.modules.identity.domain.authorization.ports.user_role_repository import UserRoleRepository
 
 __all__ = [
-    "OrganizationRoleRepository",
     "PermissionChecker",
     "PermissionGroupRepository",
     "PermissionRepository",

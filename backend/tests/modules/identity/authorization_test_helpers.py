@@ -6,7 +6,6 @@ from sqlalchemy.orm import Session
 
 from app.modules.identity.application.authorization import AuthorizationService
 from app.modules.identity.domain.authorization.entities import (
-    OrganizationRole,
     Permission,
     PermissionGroup,
     Role,
@@ -16,7 +15,6 @@ from app.modules.identity.domain.authorization.entities import (
 from app.modules.identity.domain.authorization.enums import AssignmentStatus, RoleScope
 from app.modules.identity.domain.authorization.value_objects.identity import (
     OrganizationId,
-    OrganizationRoleId,
     PermissionGroupId,
     PermissionId,
     RoleId,
@@ -35,7 +33,6 @@ from app.modules.identity.infrastructure.authorization.persistence.models.permis
     PermissionGroupModel,
 )
 from app.modules.identity.infrastructure.authorization.repositories import (
-    SqlAlchemyOrganizationRoleRepository,
     SqlAlchemyPermissionGroupRepository,
     SqlAlchemyPermissionRepository,
     SqlAlchemyRolePermissionRepository,
@@ -90,14 +87,12 @@ class UserRolePermissionSeed:
     permission_code: str
     role: Role
     permission: Permission
-    org_role: OrganizationRole
     user_role: UserRole
     user_repo: SqlAlchemyUserRepository
     org_repo: SqlAlchemyOrganizationRepository
     role_repo: SqlAlchemyRoleRepository
     permission_repo: SqlAlchemyPermissionRepository
     role_permission_repo: SqlAlchemyRolePermissionRepository
-    org_role_repo: SqlAlchemyOrganizationRoleRepository
     user_role_repo: SqlAlchemyUserRoleRepository
     checker: SqlAlchemyPermissionChecker
     db_session: Session
@@ -115,7 +110,6 @@ def seed_user_role_with_permission(
     group_repo = SqlAlchemyPermissionGroupRepository(db_session)
     permission_repo = SqlAlchemyPermissionRepository(db_session)
     role_permission_repo = SqlAlchemyRolePermissionRepository(db_session)
-    org_role_repo = SqlAlchemyOrganizationRoleRepository(db_session)
     user_role_repo = SqlAlchemyUserRoleRepository(db_session)
     checker = SqlAlchemyPermissionChecker(db_session)
 
@@ -176,23 +170,12 @@ def seed_user_role_with_permission(
         )
     )
     role_permission_repo.grant(RolePermission(role_id=role.id, permission_id=permission.id))
-    org_role = org_role_repo.add(
-        OrganizationRole(
-            id=OrganizationRoleId(uuid.uuid4()),
-            organization_id=OrganizationId(org.id),
-            role_id=role.id,
-            status=AssignmentStatus.ACTIVE,
-            is_default=True,
-            created_at=_now(),
-            updated_at=_now(),
-        )
-    )
     user_role = user_role_repo.add(
         UserRole(
             id=UserRoleId(uuid.uuid4()),
             user_id=UserId(user.id),
             organization_id=OrganizationId(org.id),
-            organization_role_id=org_role.id,
+            role_id=role.id,
             status=AssignmentStatus.ACTIVE,
             assigned_at=_now(),
         )
@@ -205,14 +188,12 @@ def seed_user_role_with_permission(
         permission_code=permission_code,
         role=role,
         permission=permission,
-        org_role=org_role,
         user_role=user_role,
         user_repo=user_repo,
         org_repo=org_repo,
         role_repo=role_repo,
         permission_repo=permission_repo,
         role_permission_repo=role_permission_repo,
-        org_role_repo=org_role_repo,
         user_role_repo=user_role_repo,
         checker=checker,
         db_session=db_session,

@@ -1,7 +1,4 @@
 from app.modules.identity.domain.authorization.value_objects.identity.organization_id import OrganizationId
-from app.modules.identity.domain.authorization.value_objects.identity.organization_role_id import (
-    OrganizationRoleId,
-)
 from app.modules.identity.domain.authorization.value_objects.identity.permission_group_id import (
     PermissionGroupId,
 )
@@ -12,7 +9,6 @@ from app.modules.identity.domain.authorization.value_objects.identity.user_role_
 
 __all__ = [
     "OrganizationId",
-    "OrganizationRoleId",
     "PermissionGroupId",
     "PermissionId",
     "RoleId",

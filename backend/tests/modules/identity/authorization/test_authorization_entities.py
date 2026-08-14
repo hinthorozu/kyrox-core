@@ -4,7 +4,6 @@ from datetime import UTC, datetime
 import pytest
 
 from app.modules.identity.domain.authorization.entities import (
-    OrganizationRole,
     Permission,
     PermissionGroup,
     Role,
@@ -15,7 +14,6 @@ from app.modules.identity.domain.authorization.enums import AssignmentStatus, Ro
 from app.modules.identity.domain.authorization.exceptions import InvalidPermissionError, InvalidRoleError
 from app.modules.identity.domain.authorization.value_objects.identity import (
     OrganizationId,
-    OrganizationRoleId,
     PermissionGroupId,
     PermissionId,
     RoleId,
@@ -82,27 +80,12 @@ def test_role_assert_active() -> None:
         role.assert_active()
 
 
-def test_organization_role_assert_active() -> None:
-    org_role = OrganizationRole(
-        id=OrganizationRoleId(uuid.uuid4()),
-        organization_id=OrganizationId(uuid.uuid4()),
-        role_id=RoleId(uuid.uuid4()),
-        status=AssignmentStatus.INACTIVE,
-        is_default=False,
-        created_at=_now(),
-        updated_at=_now(),
-    )
-
-    with pytest.raises(InvalidRoleError):
-        org_role.assert_active()
-
-
 def test_user_role_revoke_marks_assignment_ineffective() -> None:
     user_role = UserRole(
         id=UserRoleId(uuid.uuid4()),
         user_id=UserId(uuid.uuid4()),
         organization_id=OrganizationId(uuid.uuid4()),
-        organization_role_id=OrganizationRoleId(uuid.uuid4()),
+        role_id=RoleId(uuid.uuid4()),
         status=AssignmentStatus.ACTIVE,
         assigned_at=_now(),
     )

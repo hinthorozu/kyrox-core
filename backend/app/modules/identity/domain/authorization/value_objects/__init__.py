@@ -1,6 +1,5 @@
 from app.modules.identity.domain.authorization.value_objects.identity import (
     OrganizationId,
-    OrganizationRoleId,
     PermissionGroupId,
     PermissionId,
     RoleId,
@@ -17,7 +16,6 @@ from app.modules.identity.domain.authorization.value_objects.rbac import (
 
 __all__ = [
     "OrganizationId",
-    "OrganizationRoleId",
     "PermissionCode",
     "PermissionGroupCode",
     "PermissionGroupId",
