@@ -18,7 +18,7 @@ def enqueue_request_to_command(
     )
 
 
-def get_job_command(job_id: UUID, organization_id: UUID) -> GetJobCommand:
+def get_job_command(job_id: UUID, organization_id: UUID | None) -> GetJobCommand:
     return GetJobCommand(job_id=job_id, organization_id=organization_id)
 
 
