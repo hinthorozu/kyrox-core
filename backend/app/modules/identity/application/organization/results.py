@@ -19,4 +19,4 @@ class OrganizationResult:
 @dataclass(frozen=True, slots=True)
 class CreateOrganizationResult:
     organization: OrganizationResult
-    membership_id: MembershipId
+    membership_id: MembershipId | None = None
