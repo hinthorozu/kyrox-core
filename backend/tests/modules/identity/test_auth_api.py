@@ -7,6 +7,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
+from app.core.config import settings
 from app.db.base import Base
 from app.db.session import get_db
 from app.main import create_app
@@ -52,7 +53,13 @@ def client(db_session: Session) -> Generator[TestClient, None, None]:
     app.dependency_overrides.clear()
 
 
-def _seed_active_user(db_session: Session, email: str, password: str) -> AuthUser:
+def _seed_active_user(
+    db_session: Session,
+    email: str,
+    password: str,
+    *,
+    must_change_password: bool = False,
+) -> AuthUser:
     hasher = Argon2idPasswordHasher()
     clock = UtcClock()
     user_repo = SqlAlchemyUserRepository(db_session, clock)
@@ -65,6 +72,7 @@ def _seed_active_user(db_session: Session, email: str, password: str) -> AuthUse
             status=UserStatus.ACTIVE,
             created_at=now,
             updated_at=now,
+            must_change_password=must_change_password,
         )
     )
 
@@ -81,9 +89,81 @@ def test_auth_login_success(client: TestClient, db_session: Session) -> None:
     assert response.status_code == 200
     body = response.json()
     assert body["token_type"] == "bearer"
-    assert body["expires_in"] == 900
+    assert body["expires_in"] == settings.ACCESS_TOKEN_EXPIRE_DAYS * 24 * 60 * 60
+    assert body["must_change_password"] is False
     assert body["access_token"]
     assert body["refresh_token"]
+
+
+def test_auth_login_exposes_forced_password_change(client: TestClient, db_session: Session) -> None:
+    _seed_active_user(
+        db_session,
+        "forced@example.com",
+        "temporary123",
+        must_change_password=True,
+    )
+    db_session.commit()
+
+    response = client.post(
+        "/api/v1/auth/login",
+        json={"email": "forced@example.com", "password": "temporary123"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["must_change_password"] is True
+
+
+def test_change_password_clears_forced_state(client: TestClient, db_session: Session) -> None:
+    user = _seed_active_user(
+        db_session,
+        "forced@example.com",
+        "temporary123",
+        must_change_password=True,
+    )
+    db_session.commit()
+
+    login_response = client.post(
+        "/api/v1/auth/login",
+        json={"email": "forced@example.com", "password": "temporary123"},
+    )
+    token = login_response.json()["access_token"]
+
+    response = client.post(
+        "/api/v1/auth/change-password",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"current_password": "temporary123", "new_password": "permanent123"},
+    )
+
+    assert response.status_code == 204
+    db_session.expire_all()
+    stored = db_session.get(identity_models.UserModel, user.id.value)
+    assert stored is not None
+    assert stored.must_change_password is False
+    assert Argon2idPasswordHasher().verify("permanent123", stored.password_hash)
+
+
+def test_change_password_rejects_same_password(client: TestClient, db_session: Session) -> None:
+    _seed_active_user(
+        db_session,
+        "forced@example.com",
+        "temporary123",
+        must_change_password=True,
+    )
+    db_session.commit()
+
+    login_response = client.post(
+        "/api/v1/auth/login",
+        json={"email": "forced@example.com", "password": "temporary123"},
+    )
+    token = login_response.json()["access_token"]
+
+    response = client.post(
+        "/api/v1/auth/change-password",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"current_password": "temporary123", "new_password": "temporary123"},
+    )
+
+    assert response.status_code == 400
 
 
 def test_auth_login_invalid_credentials(client: TestClient, db_session: Session) -> None:
