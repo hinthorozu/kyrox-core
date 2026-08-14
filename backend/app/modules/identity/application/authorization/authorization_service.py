@@ -22,18 +22,11 @@ class AuthorizationService:
 
     def check_permission(self, command: CheckPermissionCommand) -> AuthorizationDecision:
         snapshot = self._platform_user_reader.get_snapshot(command.user_id)
-        if snapshot is None or not snapshot.can_be_authorized():
-            permission_code = self._permission_policy.normalize(command.permission_code)
-            return AuthorizationDecision(
-                allowed=False,
-                permission_code=permission_code,
-                denial_reason="user_not_authorizable",
-            )
 
-        # Super Admin is checked before RBAC/permission normalization or lookup.
-        # The DB-backed platform flag is therefore independent from seeded
-        # permission rows, role mappings and organization-scoped CRUD grants.
-        if snapshot.is_super_admin:
+        # The DB-backed Super Admin flag is the first authorization rule.
+        # It bypasses account authorization state, permission normalization,
+        # RBAC lookup, CRUD grants, memberships and organization-scoped roles.
+        if snapshot is not None and snapshot.is_super_admin:
             raw_permission = command.permission_code.strip().lower()
             return AuthorizationDecision(
                 allowed=True,
@@ -42,6 +35,13 @@ class AuthorizationService:
             )
 
         permission_code = self._permission_policy.normalize(command.permission_code)
+        if snapshot is None or not snapshot.can_be_authorized():
+            return AuthorizationDecision(
+                allowed=False,
+                permission_code=permission_code,
+                denial_reason="user_not_authorizable",
+            )
+
         allowed = self._permission_checker.has_permission(
             command.user_id,
             command.organization_id,
