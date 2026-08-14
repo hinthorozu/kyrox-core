@@ -22,6 +22,7 @@ class User:
     created_at: datetime
     updated_at: datetime
     deleted_at: datetime | None = None
+    must_change_password: bool = False
 
     @property
     def is_deleted(self) -> bool:
