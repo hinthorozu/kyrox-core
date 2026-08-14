@@ -38,7 +38,9 @@ class CreateOrganizationUseCase:
         self._clock = clock
         self._id_generator = id_generator
         self._naming_policy = naming_policy or OrganizationNamingPolicy()
-        self._owner_role_slug = owner_role_slug or RoleSlug.create("owner")
+        # Platform ownership is identity_users.is_super_admin. The first user of
+        # an organization receives the organization-scoped admin role.
+        self._owner_role_slug = owner_role_slug or RoleSlug.create("organization_admin")
 
     def execute(self, command: CreateOrganizationCommand) -> CreateOrganizationResult:
         owner = self._user_repository.get_by_id(command.owner_user_id)
