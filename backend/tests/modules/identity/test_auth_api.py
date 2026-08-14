@@ -15,6 +15,7 @@ from app.modules.identity.domain.authentication.entities.user import User as Aut
 from app.modules.identity.domain.authentication.enums.user_status import UserStatus
 from app.modules.identity.domain.authentication.value_objects.identity.user_id import UserId
 from app.modules.identity.domain.authentication.value_objects.security.email import Email
+from app.modules.identity.domain.authentication.value_objects.security.password_hash import PasswordHash
 from app.modules.identity.infrastructure.authentication.clock import UtcClock
 from app.modules.identity.infrastructure.authentication.repositories import SqlAlchemyUserRepository
 from app.modules.identity.infrastructure.authentication.security import Argon2idPasswordHasher
@@ -139,7 +140,10 @@ def test_change_password_clears_forced_state(client: TestClient, db_session: Ses
     stored = db_session.get(identity_models.UserModel, user.id.value)
     assert stored is not None
     assert stored.must_change_password is False
-    assert Argon2idPasswordHasher().verify("permanent123", stored.password_hash)
+    assert Argon2idPasswordHasher().verify(
+        "permanent123",
+        PasswordHash(stored.password_hash),
+    )
 
 
 def test_change_password_rejects_same_password(client: TestClient, db_session: Session) -> None:
