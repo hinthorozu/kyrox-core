@@ -40,6 +40,16 @@ def check_organization_permission(
     authorization_service: AuthorizationService = Depends(get_authorization_service),
 ) -> CheckPermissionResponse:
     assert_organization_scope(organization_id, context)
+
+    # Super Admin is platform-wide god mode. Do not normalize or look up the
+    # permission code in RBAC: missing/deleted/not-yet-seeded permissions must
+    # still resolve as allowed for a DB-backed Super Admin.
+    if context.is_super_admin:
+        return CheckPermissionResponse(
+            allowed=True,
+            permission_code=body.permission_code,
+        )
+
     try:
         decision = authorization_service.check_permission(
             CheckPermissionCommand(
