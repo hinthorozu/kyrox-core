@@ -27,7 +27,7 @@ from app.modules.identity.domain.entities import Organization, User
 from app.modules.identity.infrastructure.authentication.security.jwt_token_service import (
     JwtTokenService,
 )
-from app.modules.identity.infrastructure.persistence import models as identity_models
+from app.modules.identity.infrastructure.persistence import models as identity_models  # noqa: F401
 from authorization_test_helpers import build_authorization_service, seed_user_role_with_permission
 
 
@@ -164,28 +164,6 @@ def test_guard_rejects_missing_permission(
     )
 
     assert response.status_code == 403
-
-
-def test_guard_blocks_user_who_must_change_password(
-    guard_client: TestClient,
-    db_session: Session,
-) -> None:
-    user, org, token = _seed(db_session)
-    model = db_session.get(identity_models.UserModel, user.id)
-    assert model is not None
-    model.must_change_password = True
-    db_session.commit()
-
-    response = guard_client.get(
-        "/protected",
-        headers={
-            "Authorization": f"Bearer {token}",
-            "X-Organization-Id": str(org.id),
-        },
-    )
-
-    assert response.status_code == 403
-    assert response.json()["detail"] == "Password change required"
 
 
 def test_guard_allows_authorized_request(

@@ -46,14 +46,6 @@ class SqlAlchemyOrganizationRepository:
         model.deleted_at = self._clock.now()
         self._session.flush()
 
-    def list_all(self) -> list[Organization]:
-        stmt = (
-            select(OrganizationModel)
-            .where(OrganizationModel.deleted_at.is_(None))
-            .order_by(OrganizationModel.name.asc())
-        )
-        return [OrganizationMapper.to_domain(model) for model in self._session.scalars(stmt).all()]
-
     def get_by_id(self, organization_id: OrganizationId) -> Organization | None:
         model = self._session.get(OrganizationModel, organization_id.value)
         if model is None or model.deleted_at is not None:

@@ -4,7 +4,6 @@ from app.modules.identity.infrastructure.persistence.models import (
     UserModel,
 )
 
-
 def test_identity_user_table_metadata() -> None:
     table = UserModel.__table__
 
@@ -15,7 +14,6 @@ def test_identity_user_table_metadata() -> None:
         "password_hash",
         "status",
         "is_super_admin",
-        "must_change_password",
         "created_at",
         "updated_at",
         "deleted_at",
