@@ -8,6 +8,8 @@ from app.modules.identity.api.authentication.dependencies import (
 from app.modules.identity.api.membership.dependencies import (
     get_membership_repository,
     get_organization_repository,
+    get_organization_role_repository,
+    get_role_repository,
 )
 from app.modules.identity.application.authentication.id_generator import IdGenerator
 from app.modules.identity.application.organization.create_organization import CreateOrganizationUseCase
@@ -18,6 +20,10 @@ from app.modules.identity.application.organization.suspend_organization import S
 from app.modules.identity.application.organization.update_organization import UpdateOrganizationUseCase
 from app.modules.identity.domain.authentication.ports.clock import Clock
 from app.modules.identity.domain.authentication.ports.user_repository import UserRepository
+from app.modules.identity.domain.authorization.ports.organization_role_repository import (
+    OrganizationRoleRepository,
+)
+from app.modules.identity.domain.authorization.ports.role_repository import RoleRepository
 from app.modules.identity.domain.membership.ports.membership_repository import MembershipRepository
 from app.modules.identity.domain.organization.ports.organization_repository import OrganizationRepository
 
@@ -25,12 +31,16 @@ from app.modules.identity.domain.organization.ports.organization_repository impo
 def get_create_organization_use_case(
     organization_repository: OrganizationRepository = Depends(get_organization_repository),
     user_repository: UserRepository = Depends(get_user_repository),
+    role_repository: RoleRepository = Depends(get_role_repository),
+    organization_role_repository: OrganizationRoleRepository = Depends(get_organization_role_repository),
     clock: Clock = Depends(get_clock),
     id_generator: IdGenerator = Depends(get_id_generator),
 ) -> CreateOrganizationUseCase:
     return CreateOrganizationUseCase(
         organization_repository=organization_repository,
         user_repository=user_repository,
+        role_repository=role_repository,
+        organization_role_repository=organization_role_repository,
         clock=clock,
         id_generator=id_generator,
     )
