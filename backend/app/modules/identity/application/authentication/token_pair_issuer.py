@@ -84,4 +84,5 @@ class TokenPairIssuer:
             refresh_token=refresh_token_value,
             token_type="bearer",
             expires_in=self._token_policy.access_token_expire_seconds,
+            must_change_password=user.must_change_password,
         )
