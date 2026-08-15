@@ -34,7 +34,7 @@ PERMISSION_CODES: tuple[tuple[str, str], ...] = (
     ("fair_crm.mail_templates.create", "Create CRM mail templates"),
     ("fair_crm.mail_templates.update", "Update CRM mail templates"),
     ("fair_crm.mail_templates.delete", "Delete CRM mail templates"),
-    ("fair_crm.mail_templates.execute", "Execute CRM mail template rendering"),
+    ("fair_crm.mail_templates.render", "Render CRM mail templates"),
 )
 
 ALL_NEW_PERMISSION_CODES: tuple[str, ...] = tuple(code for code, _ in PERMISSION_CODES)
