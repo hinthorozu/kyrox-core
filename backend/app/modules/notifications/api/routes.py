@@ -54,7 +54,7 @@ def send_organization_notification(
     organization_id: UUID,
     body: SendNotificationRequest,
     background_tasks: BackgroundTasks,
-    context: AuthorizationContext = Depends(require_permission("notifications.platform.send")),
+    context: AuthorizationContext = Depends(require_permission("notifications.platform.execute")),
     use_case: SendNotificationUseCase = Depends(get_send_notification_use_case),
     worker_scheduler: NotificationWorkerScheduler = Depends(get_notification_worker_scheduler),
 ) -> JSONResponse:
