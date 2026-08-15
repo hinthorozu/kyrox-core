@@ -57,7 +57,7 @@ def seed_user_with_notification_permissions(
     db_session: Session,
     *,
     permission_codes: tuple[str, ...] = (
-        "notifications.platform.send",
+        "notifications.platform.execute",
         "notifications.platform.read",
     ),
 ):
