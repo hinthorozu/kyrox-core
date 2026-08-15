@@ -94,7 +94,8 @@ PERMISSION_GROUPS: tuple[dict, ...] = (
             ("fair_crm.scraper.create", "Create CRM scraper adapters"),
             ("fair_crm.scraper.update", "Update CRM scraper adapters"),
             ("fair_crm.scraper.delete", "Delete CRM scraper adapters"),
-            ("fair_crm.scraper.execute", "Execute CRM scraper runs and output downloads"),
+            ("fair_crm.scraper.run", "Run CRM scraper adapters"),
+            ("fair_crm.scraper.download", "Download CRM scraper run outputs"),
         ),
     },
     {
@@ -117,7 +118,7 @@ PERMISSION_GROUPS: tuple[dict, ...] = (
         "permissions": (
             ("fair_crm.admin.backups.read", "Read CRM database backups"),
             ("fair_crm.admin.backups.create", "Create CRM database backups"),
-            ("fair_crm.admin.backups.execute", "Execute CRM database backup downloads"),
+            ("fair_crm.admin.backups.download", "Download CRM database backups"),
         ),
     },
     {
@@ -127,7 +128,7 @@ PERMISSION_GROUPS: tuple[dict, ...] = (
         "sort_order": 91,
         "permissions": (
             ("fair_crm.admin.data_operations.read", "Read CRM admin data operations"),
-            ("fair_crm.admin.data_operations.execute", "Execute CRM admin data operations"),
+            ("fair_crm.admin.data_operations.run", "Run CRM admin data operations"),
         ),
     },
 )
