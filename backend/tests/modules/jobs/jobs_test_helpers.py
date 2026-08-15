@@ -61,7 +61,7 @@ def _now():
 def seed_user_with_job_permissions(
     db_session: Session,
     *,
-    permission_codes: tuple[str, ...] = ("jobs.platform.enqueue", "jobs.platform.read"),
+    permission_codes: tuple[str, ...] = ("jobs.platform.execute", "jobs.platform.read"),
 ):
     user_repo = SqlAlchemyUserRepository(db_session, UtcClock())
     org_repo = SqlAlchemyOrganizationRepository(db_session, UtcClock())
