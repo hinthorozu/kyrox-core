@@ -47,7 +47,7 @@ def enqueue_organization_job(
     organization_id: UUID,
     body: EnqueueJobRequest,
     background_tasks: BackgroundTasks,
-    context: AuthorizationContext = Depends(require_permission("jobs.platform.enqueue")),
+    context: AuthorizationContext = Depends(require_permission("jobs.platform.execute")),
     use_case: EnqueueJobUseCase = Depends(get_enqueue_job_use_case),
     worker=Depends(get_in_process_job_worker),
 ) -> JSONResponse:
