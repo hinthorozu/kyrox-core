@@ -11,9 +11,3 @@ class OrganizationStatus(StrEnum):
     ACTIVE = "active"
     INACTIVE = "inactive"
     SUSPENDED = "suspended"
-
-
-class MembershipStatus(StrEnum):
-    ACTIVE = "active"
-    INACTIVE = "inactive"
-    SUSPENDED = "suspended"
