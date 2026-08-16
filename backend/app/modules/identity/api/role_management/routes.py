@@ -103,6 +103,8 @@ def _validated_permissions(db: Session, permission_ids: list[UUID], *, allow_res
         raise AppException("One or more permissions do not exist", status_code=status.HTTP_400_BAD_REQUEST)
     if any(item.lifecycle_state != "active" for item in permissions):
         raise AppException("Locked or inactive permissions cannot be assigned", status_code=status.HTTP_400_BAD_REQUEST)
+    if any(item.permission_scope != "organization" for item in permissions):
+        raise AppException("System permissions cannot be assigned to organization roles", status_code=status.HTTP_403_FORBIDDEN)
     if not allow_restricted and any(not item.is_assignable for item in permissions):
         raise AppException("A platform-managed permission cannot be assigned", status_code=status.HTTP_403_FORBIDDEN)
     return permissions
@@ -277,11 +279,13 @@ def list_organization_role_permissions(
         select(PermissionModel).where(
             PermissionModel.lifecycle_state == "active",
             PermissionModel.is_assignable.is_(True),
+            PermissionModel.permission_scope == "organization",
         ).order_by(PermissionModel.code)
     ).all()
     return [PermissionResponse(
         id=item.id, code=item.code, description=item.description,
         lifecycle_state=item.lifecycle_state, is_assignable=item.is_assignable,
+        permission_scope=item.permission_scope,
     ) for item in permissions]
 
 
@@ -368,6 +372,7 @@ def list_permissions(
     return [PermissionResponse.model_validate({
         "id": item.id, "code": item.code, "description": item.description,
         "lifecycle_state": item.lifecycle_state, "is_assignable": item.is_assignable,
+        "permission_scope": item.permission_scope,
     }) for item in db.scalars(select(PermissionModel).order_by(PermissionModel.code)).all()]
 
 
