@@ -189,7 +189,7 @@ def delete_organization(
 )
 def suspend_organization(
     organization_id: UUID,
-    context: AuthorizationContext = Depends(require_permission("identity.organizations.update")),
+    context: AuthorizationContext = Depends(require_permission("identity.organizations.suspend")),
     use_case: SuspendOrganizationUseCase = Depends(get_suspend_organization_use_case),
 ) -> OrganizationResponse:
     assert_organization_scope(organization_id, context)
