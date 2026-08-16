@@ -1,17 +1,17 @@
 from uuid import UUID
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Response, status
 
 from app.modules.identity.api.authorization.context import AuthenticatedOrganizationContext
 from app.modules.identity.api.authorization.dependencies import get_authorization_service
-from app.modules.identity.api.authorization.guards import require_organization_membership
+from app.modules.identity.api.authorization.guards import require_organization_access
 from app.modules.identity.api.authorization.mappers import authorization_decision_to_response
 from app.modules.identity.api.authorization.schemas import (
     CheckPermissionRequest,
     CheckPermissionResponse,
     ErrorResponse,
 )
-from app.modules.identity.api.membership.dependencies import assert_organization_scope
+from app.modules.identity.api.authorization.scope import assert_organization_scope
 from app.modules.identity.api.authorization.error_mapping import map_authorization_error
 from app.modules.identity.application.authorization import AuthorizationService, CheckPermissionCommand
 from app.modules.identity.domain.authorization.exceptions import InvalidPermissionError
@@ -21,6 +21,23 @@ from app.modules.identity.domain.authorization.value_objects.identity.organizati
 from app.modules.identity.domain.authorization.value_objects.identity.user_id import UserId
 
 router = APIRouter(tags=["authorization"])
+
+
+@router.get(
+    "/organizations/{organization_id}/access/verify",
+    status_code=status.HTTP_204_NO_CONTENT,
+    responses={
+        204: {"description": "Authenticated user may access this organization"},
+        401: {"model": ErrorResponse},
+        403: {"model": ErrorResponse},
+    },
+)
+def verify_organization_access(
+    organization_id: UUID,
+    context: AuthenticatedOrganizationContext = Depends(require_organization_access()),
+) -> Response:
+    assert_organization_scope(organization_id, context)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.post(
@@ -36,14 +53,11 @@ router = APIRouter(tags=["authorization"])
 def check_organization_permission(
     organization_id: UUID,
     body: CheckPermissionRequest,
-    context: AuthenticatedOrganizationContext = Depends(require_organization_membership()),
+    context: AuthenticatedOrganizationContext = Depends(require_organization_access()),
     authorization_service: AuthorizationService = Depends(get_authorization_service),
 ) -> CheckPermissionResponse:
     assert_organization_scope(organization_id, context)
 
-    # Super Admin is platform-wide god mode. Do not normalize or look up the
-    # permission code in RBAC: missing/deleted/not-yet-seeded permissions must
-    # still resolve as allowed for a DB-backed Super Admin.
     if context.is_super_admin:
         return CheckPermissionResponse(
             allowed=True,

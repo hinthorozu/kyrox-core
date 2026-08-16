@@ -5,8 +5,10 @@ from uuid import UUID
 import jwt
 from fastapi import Depends, Header, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from sqlalchemy.orm import Session as DbSession
 
 from app.core.exceptions import AppException
+from app.db.session import get_db
 from app.modules.identity.api.authentication.dependencies import get_token_service
 from app.modules.identity.api.authorization.context import (
     AuthenticatedOrganizationContext,
@@ -14,7 +16,6 @@ from app.modules.identity.api.authorization.context import (
 )
 from app.modules.identity.api.authorization.dependencies import (
     get_authorization_service,
-    get_membership_repository,
     get_platform_user_reader,
 )
 from app.modules.identity.api.authorization.error_mapping import map_authorization_error
@@ -30,10 +31,7 @@ from app.modules.identity.domain.authorization.value_objects.identity.organizati
     OrganizationId,
 )
 from app.modules.identity.domain.authorization.value_objects.identity.user_id import UserId
-from app.modules.identity.domain.membership.ports.membership_repository import MembershipRepository
-from app.modules.identity.domain.organization.value_objects.identity.organization_id import (
-    OrganizationId as MembershipOrganizationId,
-)
+from app.modules.identity.infrastructure.persistence.models import UserModel
 
 _bearer_scheme = HTTPBearer(auto_error=False)
 
@@ -58,7 +56,7 @@ def get_organization_id(
 
 
 def is_super_admin(user_id: UUID, platform_user_reader: PlatformUserReader) -> bool:
-    """Platform god mode. The DB flag is independent from RBAC and account scope state."""
+    """Platform god mode. The DB flag is independent from organization RBAC."""
     snapshot = platform_user_reader.get_snapshot(UserId(user_id))
     return bool(snapshot is not None and snapshot.is_super_admin)
 
@@ -86,37 +84,43 @@ def require_super_admin(
     return claims
 
 
-def _assert_active_membership(
+def _assert_organization_access(
     claims: AccessTokenClaims,
     organization_id: UUID,
-    membership_repository: MembershipRepository,
     platform_user_reader: PlatformUserReader,
+    db: DbSession,
 ) -> bool:
-    # Super Admin never needs organization membership.
+    """Validate direct user -> organization ownership.
+
+    Super Admin is organization-independent. Every other active user belongs to
+    exactly one organization through identity_users.organization_id.
+    """
     if is_super_admin(claims.sub.value, platform_user_reader):
         return True
 
-    membership = membership_repository.get_by_user_and_organization(
-        claims.sub,
-        MembershipOrganizationId(organization_id),
-    )
-    if membership is None or not membership.is_effective():
+    user = db.get(UserModel, claims.sub.value)
+    if (
+        user is None
+        or user.deleted_at is not None
+        or user.status != "active"
+        or user.organization_id != organization_id
+    ):
         raise AppException("Forbidden", status_code=status.HTTP_403_FORBIDDEN)
     return False
 
 
-def require_organization_membership() -> Callable[..., AuthenticatedOrganizationContext]:
+def require_organization_access() -> Callable[..., AuthenticatedOrganizationContext]:
     def dependency(
         claims: AccessTokenClaims = Depends(get_access_token_claims),
         organization_id: UUID = Depends(get_organization_id),
-        membership_repository: MembershipRepository = Depends(get_membership_repository),
         platform_user_reader: PlatformUserReader = Depends(get_platform_user_reader),
+        db: DbSession = Depends(get_db),
     ) -> AuthenticatedOrganizationContext:
-        actor_is_super_admin = _assert_active_membership(
+        actor_is_super_admin = _assert_organization_access(
             claims,
             organization_id,
-            membership_repository,
             platform_user_reader,
+            db,
         )
         return AuthenticatedOrganizationContext(
             user_id=claims.sub.value,
@@ -133,14 +137,16 @@ def require_permission(
     permission_code: str,
 ) -> Callable[..., AuthorizationContext]:
     def dependency(
-        context: AuthorizationContext = Depends(get_authorization_context),
+        context: AuthenticatedOrganizationContext = Depends(require_organization_access()),
         authorization_service: AuthorizationService = Depends(get_authorization_service),
     ) -> AuthorizationContext:
-        # Absolute platform bypass happens before permission-code normalization,
-        # permission-row lookup, roles or organization membership. Therefore a
-        # missing/deleted/not-yet-seeded permission can never block Super Admin.
         if context.is_super_admin:
-            return context
+            return AuthorizationContext(
+                user_id=context.user_id,
+                organization_id=context.organization_id,
+                email=context.email,
+                is_super_admin=True,
+            )
 
         try:
             authorization_service.require_permission(
@@ -153,6 +159,11 @@ def require_permission(
         except PermissionDeniedError as exc:
             raise map_authorization_error(exc) from exc
 
-        return context
+        return AuthorizationContext(
+            user_id=context.user_id,
+            organization_id=context.organization_id,
+            email=context.email,
+            is_super_admin=False,
+        )
 
     return dependency

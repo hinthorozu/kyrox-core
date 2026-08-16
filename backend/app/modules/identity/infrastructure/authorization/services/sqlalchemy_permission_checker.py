@@ -14,7 +14,7 @@ from app.modules.identity.infrastructure.authorization.persistence.models.role_p
     RolePermissionModel,
 )
 from app.modules.identity.infrastructure.authorization.persistence.models.user_role import UserRoleModel
-from app.modules.identity.infrastructure.persistence.models import OrganizationModel
+from app.modules.identity.infrastructure.persistence.models import OrganizationModel, UserModel
 
 
 class SqlAlchemyPermissionChecker:
@@ -27,12 +27,7 @@ class SqlAlchemyPermissionChecker:
         organization_id: OrganizationId,
         permission_code: PermissionCode,
     ) -> bool:
-        """Resolve non-Super-Admin access exclusively from organization RBAC.
-
-        Super Admin bypass is handled centrally before this checker is called.
-        System-scoped permissions are never authorized through organization role
-        assignments, even if a stale/manual role-permission row exists.
-        """
+        """Resolve organization access from direct ownership plus RBAC."""
         stmt = (
             select(PermissionModel.id)
             .join(
@@ -41,8 +36,14 @@ class SqlAlchemyPermissionChecker:
             )
             .join(RoleModel, RoleModel.id == RolePermissionModel.role_id)
             .join(UserRoleModel, UserRoleModel.role_id == RoleModel.id)
+            .join(UserModel, UserModel.id == UserRoleModel.user_id)
             .join(OrganizationModel, OrganizationModel.id == UserRoleModel.organization_id)
             .where(
+                UserModel.id == user_id.value,
+                UserModel.organization_id == organization_id.value,
+                UserModel.status == "active",
+                UserModel.deleted_at.is_(None),
+                UserModel.is_super_admin.is_(False),
                 UserRoleModel.user_id == user_id.value,
                 UserRoleModel.organization_id == organization_id.value,
                 UserRoleModel.status == AssignmentStatus.ACTIVE.value,

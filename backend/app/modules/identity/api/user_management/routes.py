@@ -9,7 +9,7 @@ from app.core.exceptions import AppException
 from app.db.session import get_db
 from app.modules.identity.api.authorization.context import AuthorizationContext
 from app.modules.identity.api.authorization.guards import get_access_token_claims, require_permission
-from app.modules.identity.api.membership.dependencies import assert_organization_scope
+from app.modules.identity.api.authorization.scope import assert_organization_scope
 from app.modules.identity.api.user_management.schemas import (
     AssignableRoleResponse,
     ErrorResponse,
@@ -28,7 +28,6 @@ from app.modules.identity.infrastructure.authorization.persistence.models import
     RolePermissionModel,
     UserRoleModel,
 )
-from app.modules.identity.infrastructure.membership.persistence.models import MembershipModel
 from app.modules.identity.infrastructure.organization.persistence.models import OrganizationModel
 from app.modules.identity.infrastructure.persistence.models import UserModel
 
@@ -76,7 +75,6 @@ def _resolve_role(
             "Role is not available for this organization",
             status_code=status.HTTP_400_BAD_REQUEST,
         )
-
     return role
 
 
@@ -131,24 +129,22 @@ def _active_role_for_user(
     return AssignableRoleResponse(id=role.id, name=role.name, slug=role.slug)
 
 
-def _membership_for_user(
+def _organization_user(
     db: Session,
     organization_id: UUID,
     user_id: UUID,
-) -> MembershipModel:
-    membership = db.scalars(
-        select(MembershipModel).where(
-            MembershipModel.organization_id == organization_id,
-            MembershipModel.user_id == user_id,
-            MembershipModel.deleted_at.is_(None),
-        )
-    ).first()
-    if membership is None:
+) -> UserModel:
+    user = db.get(UserModel, user_id)
+    if (
+        user is None
+        or user.deleted_at is not None
+        or user.organization_id != organization_id
+    ):
         raise AppException(
             "User not found in this organization",
             status_code=status.HTTP_404_NOT_FOUND,
         )
-    return membership
+    return user
 
 
 def _to_response(
@@ -179,17 +175,23 @@ def _assign_role(
     assigned_by: UUID,
 ) -> None:
     role = _resolve_role(db, organization_id, role_id)
+    user = db.get(UserModel, user_id)
+    if user is None or user.deleted_at is not None or user.organization_id != organization_id:
+        raise AppException(
+            "User does not belong to this organization",
+            status_code=status.HTTP_400_BAD_REQUEST,
+        )
+
     now = _now()
     active_roles = db.scalars(
         select(UserRoleModel).where(
             UserRoleModel.user_id == user_id,
-            UserRoleModel.organization_id == organization_id,
             UserRoleModel.status == "active",
             UserRoleModel.revoked_at.is_(None),
         )
     ).all()
     for item in active_roles:
-        if item.role_id == role.id:
+        if item.organization_id == organization_id and item.role_id == role.id:
             return
         item.status = "revoked"
         item.revoked_at = now
@@ -217,6 +219,7 @@ def get_user_management_context(
     db: Session = Depends(get_db),
 ) -> UserManagementContextResponse:
     user_id = UUID(str(claims.sub.value))
+    user = db.get(UserModel, user_id)
     is_super_admin = _actor_is_super_admin(db, user_id)
 
     if is_super_admin:
@@ -226,19 +229,17 @@ def get_user_management_context(
                 OrganizationModel.status == "active",
             ).order_by(OrganizationModel.name.asc())
         ).all()
+    elif user is not None and user.deleted_at is None and user.organization_id is not None:
+        organization = db.get(OrganizationModel, user.organization_id)
+        organizations = (
+            [organization]
+            if organization is not None
+            and organization.deleted_at is None
+            and organization.status == "active"
+            else []
+        )
     else:
-        organizations = db.scalars(
-            select(OrganizationModel)
-            .join(MembershipModel, MembershipModel.organization_id == OrganizationModel.id)
-            .where(
-                MembershipModel.user_id == user_id,
-                MembershipModel.deleted_at.is_(None),
-                MembershipModel.status == "active",
-                OrganizationModel.deleted_at.is_(None),
-                OrganizationModel.status == "active",
-            )
-            .order_by(OrganizationModel.name.asc())
-        ).unique().all()
+        organizations = []
 
     return UserManagementContextResponse(
         is_super_admin=is_super_admin,
@@ -294,14 +295,12 @@ def list_users(
     actor_is_super = _actor_is_super_admin(db, context.user_id)
     users = db.scalars(
         select(UserModel)
-        .join(MembershipModel, MembershipModel.user_id == UserModel.id)
         .where(
-            MembershipModel.organization_id == organization_id,
-            MembershipModel.deleted_at.is_(None),
+            UserModel.organization_id == organization_id,
             UserModel.deleted_at.is_(None),
         )
         .order_by(UserModel.email.asc())
-    ).unique().all()
+    ).all()
     return ManagedUserListResponse(
         items=[
             _to_response(db, organization_id, user, expose_super_admin=actor_is_super)
@@ -327,10 +326,7 @@ def get_user(
     db: Session = Depends(get_db),
 ) -> ManagedUserResponse:
     assert_organization_scope(organization_id, context)
-    _membership_for_user(db, organization_id, user_id)
-    user = db.get(UserModel, user_id)
-    if user is None or user.deleted_at is not None:
-        raise AppException("User not found", status_code=status.HTTP_404_NOT_FOUND)
+    user = _organization_user(db, organization_id, user_id)
     return _to_response(
         db,
         organization_id,
@@ -370,12 +366,14 @@ def create_user(
     if not payload.is_super_admin:
         selected_role = _resolve_role(db, organization_id, payload.role_id)
         _assert_can_assign_role(db, context, selected_role)
+
     now = _now()
     user = UserModel(
         email=email,
         password_hash=Argon2idPasswordHasher().hash(payload.password).value,
         status=payload.status.value,
         is_super_admin=payload.is_super_admin if actor_is_super else False,
+        organization_id=None if payload.is_super_admin else organization_id,
         created_at=now,
         updated_at=now,
         deleted_at=None,
@@ -383,19 +381,6 @@ def create_user(
     db.add(user)
     db.flush()
 
-    db.add(
-        MembershipModel(
-            user_id=user.id,
-            organization_id=organization_id,
-            status="active",
-            invited_at=None,
-            joined_at=now,
-            created_at=now,
-            updated_at=now,
-            deleted_at=None,
-        )
-    )
-    db.flush()
     if not user.is_super_admin:
         _assign_role(
             db,
@@ -426,14 +411,16 @@ def update_user(
     db: Session = Depends(get_db),
 ) -> ManagedUserResponse:
     assert_organization_scope(organization_id, context)
-    _membership_for_user(db, organization_id, user_id)
     user = db.get(UserModel, user_id)
     if user is None or user.deleted_at is not None:
         raise AppException("User not found", status_code=status.HTTP_404_NOT_FOUND)
 
     actor_is_super = _actor_is_super_admin(db, context.user_id)
     was_super_admin = user.is_super_admin
-    if user.is_super_admin and not actor_is_super:
+
+    if not was_super_admin and user.organization_id != organization_id:
+        raise AppException("User not found in this organization", status_code=status.HTTP_404_NOT_FOUND)
+    if was_super_admin and not actor_is_super:
         raise AppException(
             "Only a Super Admin can modify a Super Admin",
             status_code=status.HTTP_403_FORBIDDEN,
@@ -466,25 +453,32 @@ def update_user(
         user.status = payload.status.value
     if payload.is_super_admin is not None:
         user.is_super_admin = payload.is_super_admin
+
     if user.is_super_admin:
+        user.organization_id = None
         now = _now()
-        for item in db.scalars(select(UserRoleModel).where(
-            UserRoleModel.user_id == user_id,
-            UserRoleModel.status == "active",
-            UserRoleModel.revoked_at.is_(None),
-        )).all():
+        for item in db.scalars(
+            select(UserRoleModel).where(
+                UserRoleModel.user_id == user_id,
+                UserRoleModel.status == "active",
+                UserRoleModel.revoked_at.is_(None),
+            )
+        ).all():
             item.status = "revoked"
             item.revoked_at = now
-    elif payload.role_id is not None:
-        selected_role = _resolve_role(db, organization_id, payload.role_id)
-        _assert_can_assign_role(db, context, selected_role)
-        _assign_role(
-            db,
-            organization_id=organization_id,
-            user_id=user_id,
-            role_id=payload.role_id,
-            assigned_by=context.user_id,
-        )
+    else:
+        user.organization_id = organization_id
+        if payload.role_id is not None:
+            selected_role = _resolve_role(db, organization_id, payload.role_id)
+            _assert_can_assign_role(db, context, selected_role)
+            _assign_role(
+                db,
+                organization_id=organization_id,
+                user_id=user_id,
+                role_id=payload.role_id,
+                assigned_by=context.user_id,
+            )
+
     user.updated_at = _now()
     db.flush()
     return _to_response(db, organization_id, user, expose_super_admin=actor_is_super)
@@ -506,26 +500,24 @@ def delete_user(
     db: Session = Depends(get_db),
 ) -> Response:
     assert_organization_scope(organization_id, context)
-    membership = _membership_for_user(db, organization_id, user_id)
     user = db.get(UserModel, user_id)
     if user is None or user.deleted_at is not None:
         raise AppException("User not found", status_code=status.HTTP_404_NOT_FOUND)
 
     actor_is_super = _actor_is_super_admin(db, context.user_id)
-    if user.is_super_admin and not actor_is_super:
-        raise AppException(
-            "Only a Super Admin can remove a Super Admin",
-            status_code=status.HTTP_403_FORBIDDEN,
-        )
+    if user.is_super_admin:
+        if not actor_is_super:
+            raise AppException(
+                "Only a Super Admin can remove a Super Admin",
+                status_code=status.HTTP_403_FORBIDDEN,
+            )
+    elif user.organization_id != organization_id:
+        raise AppException("User not found in this organization", status_code=status.HTTP_404_NOT_FOUND)
 
     now = _now()
-    membership.status = "removed"
-    membership.deleted_at = now
-    membership.updated_at = now
     for item in db.scalars(
         select(UserRoleModel).where(
             UserRoleModel.user_id == user_id,
-            UserRoleModel.organization_id == organization_id,
             UserRoleModel.status == "active",
             UserRoleModel.revoked_at.is_(None),
         )
@@ -533,16 +525,8 @@ def delete_user(
         item.status = "revoked"
         item.revoked_at = now
 
-    remaining_memberships = db.scalar(
-        select(func.count(MembershipModel.id)).where(
-            MembershipModel.user_id == user_id,
-            MembershipModel.organization_id != organization_id,
-            MembershipModel.deleted_at.is_(None),
-        )
-    )
-    if not remaining_memberships:
-        user.deleted_at = now
-        user.status = "inactive"
-        user.updated_at = now
+    user.deleted_at = now
+    user.status = "inactive"
+    user.updated_at = now
     db.flush()
     return Response(status_code=status.HTTP_204_NO_CONTENT)

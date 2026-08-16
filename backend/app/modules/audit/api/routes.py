@@ -32,8 +32,8 @@ from app.modules.identity.api.authorization.context import (
     AuthenticatedOrganizationContext,
     AuthorizationContext,
 )
-from app.modules.identity.api.authorization.guards import require_organization_membership, require_permission
-from app.modules.identity.api.membership.dependencies import assert_organization_scope
+from app.modules.identity.api.authorization.guards import require_organization_access, require_permission
+from app.modules.identity.api.authorization.scope import assert_organization_scope
 
 router = APIRouter(tags=["audit"])
 
@@ -102,7 +102,7 @@ def list_organization_audit_logs(
 def record_organization_audit_event(
     organization_id: UUID,
     body: RecordAuditEventRequest,
-    context: AuthenticatedOrganizationContext = Depends(require_organization_membership()),
+    context: AuthenticatedOrganizationContext = Depends(require_organization_access()),
     use_case: RecordOrganizationAuditEventUseCase = Depends(get_record_organization_audit_event_use_case),
 ) -> AuditLogResponse:
     assert_organization_scope(organization_id, context)
