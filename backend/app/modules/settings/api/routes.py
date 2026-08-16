@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, Query, Response, status
 
 from app.modules.identity.api.authorization.context import AuthorizationContext
 from app.modules.identity.api.authorization.guards import require_permission, require_super_admin
-from app.modules.identity.api.membership.dependencies import assert_organization_scope
+from app.modules.identity.api.authorization.scope import assert_organization_scope
 from app.modules.identity.domain.authentication.value_objects.security.access_token import AccessTokenClaims
 from app.modules.settings.api.dependencies import (
     get_delete_setting_use_case,
