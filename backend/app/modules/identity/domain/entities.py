@@ -1,14 +1,10 @@
-"""Legacy identity entities — use domain.organization and domain.membership for new code."""
+"""Legacy identity entities for user and organization compatibility."""
 
 from dataclasses import dataclass
 from datetime import datetime
 from uuid import UUID
 
-from app.modules.identity.domain.enums import (
-    MembershipStatus,
-    OrganizationStatus,
-    UserStatus,
-)
+from app.modules.identity.domain.enums import OrganizationStatus, UserStatus
 
 
 @dataclass
@@ -29,17 +25,6 @@ class Organization:
     name: str
     slug: str
     status: OrganizationStatus
-    created_at: datetime
-    updated_at: datetime
-    deleted_at: datetime | None = None
-
-
-@dataclass
-class Membership:
-    id: UUID
-    user_id: UUID
-    organization_id: UUID
-    status: MembershipStatus
     created_at: datetime
     updated_at: datetime
     deleted_at: datetime | None = None
