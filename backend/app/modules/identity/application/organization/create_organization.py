@@ -33,8 +33,8 @@ class CreateOrganizationUseCase:
 
     def execute(self, command: CreateOrganizationCommand) -> CreateOrganizationResult:
         # The creator is a platform Super Admin (enforced by the API guard).
-        # Validate the platform user, but never create an organization membership
-        # or user-role assignment for Super Admin. Platform access comes only from
+        # Validate the platform user, but never create an organization-scoped
+        # user-role assignment for Super Admin. Platform access comes only from
         # identity_users.is_super_admin.
         creator = self._user_repository.get_by_id(command.owner_user_id)
         if creator is None:
@@ -61,5 +61,4 @@ class CreateOrganizationUseCase:
 
         return CreateOrganizationResult(
             organization=to_organization_result(organization),
-            membership_id=None,
         )
