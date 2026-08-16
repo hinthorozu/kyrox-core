@@ -2,8 +2,15 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, Response, status
 
-from app.modules.identity.api.authorization.context import AuthorizationContext
-from app.modules.identity.api.authorization.guards import get_access_token_claims, require_permission
+from app.modules.identity.api.authorization.context import (
+    AuthenticatedOrganizationContext,
+    AuthorizationContext,
+)
+from app.modules.identity.api.authorization.guards import (
+    get_access_token_claims,
+    require_organization_membership,
+    require_permission,
+)
 from app.modules.identity.api.membership.dependencies import (
     assert_organization_scope,
     get_accept_membership_invite_use_case,
@@ -52,6 +59,23 @@ from app.modules.identity.domain.organization.exceptions import OrganizationErro
 from app.modules.identity.domain.organization.value_objects.identity.organization_id import OrganizationId
 
 router = APIRouter(tags=["memberships"])
+
+
+@router.get(
+    "/organizations/{organization_id}/membership/verify",
+    status_code=status.HTTP_204_NO_CONTENT,
+    responses={
+        204: {"description": "Authenticated user may access this organization"},
+        401: {"model": ErrorResponse},
+        403: {"model": ErrorResponse},
+    },
+)
+def verify_organization_membership(
+    organization_id: UUID,
+    context: AuthenticatedOrganizationContext = Depends(require_organization_membership()),
+) -> Response:
+    assert_organization_scope(organization_id, context)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.get(
