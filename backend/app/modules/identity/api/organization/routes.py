@@ -10,7 +10,7 @@ from app.modules.identity.api.authorization.guards import (
     require_permission,
     require_super_admin,
 )
-from app.modules.identity.api.membership.dependencies import assert_organization_scope
+from app.modules.identity.api.authorization.scope import assert_organization_scope
 from app.modules.identity.api.organization.dependencies import (
     get_create_organization_use_case,
     get_delete_organization_use_case,
