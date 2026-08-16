@@ -49,11 +49,8 @@ from app.modules.identity.infrastructure.authorization.repositories import (
     SqlAlchemyRoleRepository,
     SqlAlchemyUserRoleRepository,
 )
-from app.modules.identity.domain.membership.entities.membership import Membership
-from app.modules.identity.domain.membership.enums.membership_status import MembershipStatus
-from app.modules.identity.domain.membership.value_objects.identity.membership_id import MembershipId
-from app.modules.identity.infrastructure.membership.repositories import SqlAlchemyMembershipRepository
 from app.modules.identity.infrastructure.organization.repositories import SqlAlchemyOrganizationRepository
+from app.modules.identity.infrastructure.persistence.models import UserModel
 
 
 def _now() -> datetime:
@@ -120,7 +117,6 @@ def seed_user_with_org_permission(
 
     clock = UtcClock()
     now = clock.now()
-    membership_repo = SqlAlchemyMembershipRepository(db_session, clock)
     user = user_repo.add(
         User(
             id=UserId(uuid.uuid4()),
@@ -141,6 +137,11 @@ def seed_user_with_org_permission(
             updated_at=now,
         )
     )
+    user_model = db_session.get(UserModel, user.id.value)
+    assert user_model is not None
+    user_model.organization_id = org.id.value
+    db_session.flush()
+
     role = role_repo.get_by_slug(RoleSlug.create("member"), RoleScope.ORGANIZATION)
     assert role is not None
     group = group_repo.add(
@@ -176,18 +177,6 @@ def seed_user_with_org_permission(
             role_id=role.id,
             status=AssignmentStatus.ACTIVE,
             assigned_at=now,
-        )
-    )
-    membership_repo.add(
-        Membership(
-            id=MembershipId(uuid.uuid4()),
-            user_id=user.id,
-            organization_id=org.id,
-            status=MembershipStatus.ACTIVE,
-            invited_at=None,
-            joined_at=now,
-            created_at=now,
-            updated_at=now,
         )
     )
     db_session.commit()
