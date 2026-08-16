@@ -5,7 +5,7 @@ from fastapi.responses import JSONResponse
 
 from app.modules.identity.api.authorization.context import AuthorizationContext
 from app.modules.identity.api.authorization.guards import require_permission
-from app.modules.identity.api.membership.dependencies import assert_organization_scope
+from app.modules.identity.api.authorization.scope import assert_organization_scope
 from app.modules.jobs.api.dependencies import (
     get_enqueue_job_use_case,
     get_get_job_use_case,
