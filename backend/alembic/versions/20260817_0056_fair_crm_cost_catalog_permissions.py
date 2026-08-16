@@ -49,6 +49,22 @@ def upgrade() -> None:
             ),
             {"id": str(group_id), "code": GROUP_CODE},
         )
+    else:
+        connection.execute(
+            sa.text(
+                """
+                UPDATE identity_permission_groups
+                SET name='FAIR CRM Cost Catalog',
+                    module='fair_crm',
+                    description='FAIR CRM cost catalog category and product permissions',
+                    sort_order=92,
+                    is_system=TRUE,
+                    updated_at=CURRENT_TIMESTAMP
+                WHERE id=:group_id
+                """
+            ),
+            {"group_id": group_id},
+        )
 
     for code, description in PERMISSIONS:
         connection.execute(
@@ -69,6 +85,22 @@ def upgrade() -> None:
                 "code": code,
                 "description": description,
             },
+        )
+        connection.execute(
+            sa.text(
+                """
+                UPDATE identity_permissions
+                SET group_id=:group_id,
+                    description=:description,
+                    is_system=TRUE,
+                    lifecycle_state='active',
+                    is_assignable=TRUE,
+                    permission_scope='organization',
+                    updated_at=CURRENT_TIMESTAMP
+                WHERE code=:code
+                """
+            ),
+            {"group_id": str(group_id), "code": code, "description": description},
         )
 
     # OrganizationAdmin receives every organization permission through the Core
