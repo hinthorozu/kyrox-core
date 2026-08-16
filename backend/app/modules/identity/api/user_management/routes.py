@@ -502,7 +502,7 @@ def update_user(
 def delete_user(
     organization_id: UUID,
     user_id: UUID,
-    context: AuthorizationContext = Depends(require_permission("identity.users.update")),
+    context: AuthorizationContext = Depends(require_permission("identity.users.delete")),
     db: Session = Depends(get_db),
 ) -> Response:
     assert_organization_scope(organization_id, context)
