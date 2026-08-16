@@ -4,17 +4,14 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session as DbSession
 
 from app.db.utils import utc_now
-from app.modules.identity.domain.entities import Membership, Organization, User
+from app.modules.identity.domain.entities import Organization, User
 from app.modules.identity.infrastructure.persistence.mappers import (
-    membership_to_domain,
-    membership_to_model,
     organization_to_domain,
     organization_to_model,
     user_to_domain,
     user_to_model,
 )
 from app.modules.identity.infrastructure.persistence.models import (
-    MembershipModel,
     OrganizationModel,
     UserModel,
 )
@@ -118,78 +115,6 @@ class SqlAlchemyOrganizationRepository:
         model = self._session.get(OrganizationModel, organization_id)
         if model is None:
             raise ValueError(f"Organization not found: {organization_id}")
-
-        model.deleted_at = utc_now()
-        self._session.flush()
-
-
-class SqlAlchemyMembershipRepository:
-    def __init__(self, session: DbSession) -> None:
-        self._session = session
-
-    def get_by_id(self, membership_id: UUID) -> Membership | None:
-        model = self._session.get(MembershipModel, membership_id)
-        if model is None or model.deleted_at is not None:
-            return None
-        return membership_to_domain(model)
-
-    def get_by_user_and_organization(
-        self,
-        user_id: UUID,
-        organization_id: UUID,
-    ) -> Membership | None:
-        stmt = select(MembershipModel).where(
-            MembershipModel.user_id == user_id,
-            MembershipModel.organization_id == organization_id,
-            MembershipModel.deleted_at.is_(None),
-        )
-        model = self._session.scalars(stmt).first()
-        if model is None:
-            return None
-        return membership_to_domain(model)
-
-    def list_by_user_id(self, user_id: UUID) -> list[Membership]:
-        stmt = select(MembershipModel).where(
-            MembershipModel.user_id == user_id,
-            MembershipModel.deleted_at.is_(None),
-        )
-        models = self._session.scalars(stmt).all()
-        return [membership_to_domain(model) for model in models]
-
-    def list_by_organization_id(self, organization_id: UUID) -> list[Membership]:
-        stmt = select(MembershipModel).where(
-            MembershipModel.organization_id == organization_id,
-            MembershipModel.deleted_at.is_(None),
-        )
-        models = self._session.scalars(stmt).all()
-        return [membership_to_domain(model) for model in models]
-
-    def create(self, membership: Membership) -> Membership:
-        model = membership_to_model(membership)
-        self._session.add(model)
-        self._session.flush()
-        self._session.refresh(model)
-        return membership_to_domain(model)
-
-    def update(self, membership: Membership) -> Membership:
-        model = self._session.get(MembershipModel, membership.id)
-        if model is None:
-            raise ValueError(f"Membership not found: {membership.id}")
-
-        model.user_id = membership.user_id
-        model.organization_id = membership.organization_id
-        model.status = membership.status.value
-        model.updated_at = membership.updated_at
-        model.deleted_at = membership.deleted_at
-
-        self._session.flush()
-        self._session.refresh(model)
-        return membership_to_domain(model)
-
-    def soft_delete(self, membership_id: UUID) -> None:
-        model = self._session.get(MembershipModel, membership_id)
-        if model is None:
-            raise ValueError(f"Membership not found: {membership_id}")
 
         model.deleted_at = utc_now()
         self._session.flush()
