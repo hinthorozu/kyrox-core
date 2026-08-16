@@ -1,1 +1,0 @@
-"""Membership persistence layer."""
