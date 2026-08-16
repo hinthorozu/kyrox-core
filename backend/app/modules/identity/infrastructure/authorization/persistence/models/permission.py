@@ -31,6 +31,7 @@ class PermissionModel(Base):
         String(32),
         nullable=False,
         default="organization",
+        server_default="organization",
     )
     lifecycle_reason: Mapped[str | None] = mapped_column(String(512), nullable=True)
     lifecycle_changed_at: Mapped[datetime | None] = mapped_column(UTCDateTime, nullable=True)
