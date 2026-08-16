@@ -27,12 +27,11 @@ class SqlAlchemyPermissionChecker:
         organization_id: OrganizationId,
         permission_code: PermissionCode,
     ) -> bool:
-        """Resolve non-Super-Admin access exclusively from DB RBAC assignments.
+        """Resolve non-Super-Admin access exclusively from organization RBAC.
 
-        Super Admin bypass is handled centrally in the API authorization guard
-        before this checker is called. Every other role, including
-        organization_admin, is authorized only through role/permission rows in
-        the database.
+        Super Admin bypass is handled centrally before this checker is called.
+        System-scoped permissions are never authorized through organization role
+        assignments, even if a stale/manual role-permission row exists.
         """
         stmt = (
             select(PermissionModel.id)
@@ -55,6 +54,7 @@ class SqlAlchemyPermissionChecker:
                 OrganizationModel.deleted_at.is_(None),
                 PermissionModel.code == permission_code.value,
                 PermissionModel.lifecycle_state == "active",
+                PermissionModel.permission_scope == "organization",
             )
         )
         return self._session.scalars(stmt).first() is not None
