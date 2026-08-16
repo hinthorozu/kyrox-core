@@ -43,6 +43,7 @@ from app.modules.identity.infrastructure.authorization.services import (
     SqlAlchemyPermissionChecker,
     SqlAlchemyPlatformUserReader,
 )
+from app.modules.identity.infrastructure.persistence.models import UserModel
 from app.modules.identity.infrastructure.repositories import (
     SqlAlchemyOrganizationRepository,
     SqlAlchemyUserRepository,
@@ -134,6 +135,11 @@ def seed_user_role_with_permission(
             updated_at=_now(),
         )
     )
+    user_model = db_session.get(UserModel, user.id)
+    assert user_model is not None
+    user_model.organization_id = org.id
+    db_session.flush()
+
     role = role_repo.add(
         Role(
             id=RoleId(uuid.uuid4()),
