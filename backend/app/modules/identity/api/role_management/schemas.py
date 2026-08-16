@@ -9,6 +9,7 @@ class PermissionResponse(BaseModel):
     description: str
     lifecycle_state: str
     is_assignable: bool
+    permission_scope: str
 
 
 class RoleResponse(BaseModel):
