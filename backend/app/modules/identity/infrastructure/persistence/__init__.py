@@ -8,7 +8,6 @@ from app.modules.identity.infrastructure.authorization.persistence.models import
     UserRoleModel,
 )
 from app.modules.identity.infrastructure.persistence.models import (
-    MembershipModel,
     OrganizationModel,
     RefreshTokenModel,
     SessionModel,
@@ -16,7 +15,6 @@ from app.modules.identity.infrastructure.persistence.models import (
 )
 
 __all__ = [
-    "MembershipModel",
     "OrganizationModel",
     "PermissionGroupModel",
     "PermissionModel",
