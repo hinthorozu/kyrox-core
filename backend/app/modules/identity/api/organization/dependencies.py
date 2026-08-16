@@ -1,14 +1,11 @@
 from fastapi import Depends
+from sqlalchemy.orm import Session as DbSession
 
+from app.db.session import get_db
 from app.modules.identity.api.authentication.dependencies import (
     get_clock,
     get_id_generator,
     get_user_repository,
-)
-from app.modules.identity.api.membership.dependencies import (
-    get_membership_repository,
-    get_organization_repository,
-    get_role_repository,
 )
 from app.modules.identity.application.authentication.id_generator import IdGenerator
 from app.modules.identity.application.organization.create_organization import CreateOrganizationUseCase
@@ -20,8 +17,34 @@ from app.modules.identity.application.organization.update_organization import Up
 from app.modules.identity.domain.authentication.ports.clock import Clock
 from app.modules.identity.domain.authentication.ports.user_repository import UserRepository
 from app.modules.identity.domain.authorization.ports.role_repository import RoleRepository
-from app.modules.identity.domain.membership.ports.membership_repository import MembershipRepository
 from app.modules.identity.domain.organization.ports.organization_repository import OrganizationRepository
+from app.modules.identity.domain.organization.ports.user_organization_reader import UserOrganizationReader
+from app.modules.identity.infrastructure.authorization.repositories.sqlalchemy_role_repository import (
+    SqlAlchemyRoleRepository,
+)
+from app.modules.identity.infrastructure.organization.repositories.sqlalchemy_organization_repository import (
+    SqlAlchemyOrganizationRepository,
+)
+from app.modules.identity.infrastructure.organization.repositories.sqlalchemy_user_organization_reader import (
+    SqlAlchemyUserOrganizationReader,
+)
+
+
+def get_organization_repository(
+    db: DbSession = Depends(get_db),
+    clock: Clock = Depends(get_clock),
+) -> OrganizationRepository:
+    return SqlAlchemyOrganizationRepository(db, clock)
+
+
+def get_role_repository(db: DbSession = Depends(get_db)) -> RoleRepository:
+    return SqlAlchemyRoleRepository(db)
+
+
+def get_user_organization_reader(
+    db: DbSession = Depends(get_db),
+) -> UserOrganizationReader:
+    return SqlAlchemyUserOrganizationReader(db)
 
 
 def get_create_organization_use_case(
@@ -42,11 +65,11 @@ def get_create_organization_use_case(
 
 def get_list_organizations_use_case(
     organization_repository: OrganizationRepository = Depends(get_organization_repository),
-    membership_repository: MembershipRepository = Depends(get_membership_repository),
+    user_organization_reader: UserOrganizationReader = Depends(get_user_organization_reader),
 ) -> ListOrganizationsUseCase:
     return ListOrganizationsUseCase(
         organization_repository=organization_repository,
-        membership_repository=membership_repository,
+        user_organization_reader=user_organization_reader,
     )
 
 
