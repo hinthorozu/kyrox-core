@@ -11,7 +11,7 @@ from app.db.session import get_db
 from app.modules.audit.infrastructure.persistence.models import AuditLogModel
 from app.modules.identity.api.authorization.context import AuthorizationContext
 from app.modules.identity.api.authorization.guards import require_permission, require_super_admin
-from app.modules.identity.api.membership.dependencies import assert_organization_scope
+from app.modules.identity.api.authorization.scope import assert_organization_scope
 from app.modules.identity.api.role_management.schemas import (
     DeriveRoleRequest,
     PermissionLifecyclePreviewResponse,
