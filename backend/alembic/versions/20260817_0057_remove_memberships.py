@@ -29,26 +29,9 @@ def _table_exists(connection: sa.Connection, table_name: str) -> bool:
 
 
 def _backfill_user_organizations(connection: sa.Connection) -> None:
-    # Active role assignments are the strongest source of truth. Membership is
-    # only a fallback for legacy users that do not have an active role row.
-    ambiguous_roles = connection.execute(
-        sa.text(
-            f"""
-            SELECT user_id, COUNT(DISTINCT organization_id) AS organization_count
-            FROM {USER_ROLES}
-            WHERE status='active' AND revoked_at IS NULL
-            GROUP BY user_id
-            HAVING COUNT(DISTINCT organization_id) > 1
-            """
-        )
-    ).mappings().all()
-    if ambiguous_roles:
-        users = ", ".join(str(row["user_id"]) for row in ambiguous_roles[:10])
-        raise RuntimeError(
-            "Cannot remove memberships: users have active roles in multiple organizations: "
-            f"{users}"
-        )
-
+    # Active role assignments are the strongest legacy source of truth. If old
+    # data contains multiple active organization roles, the most recently
+    # assigned role wins and the other active assignments are revoked below.
     connection.execute(
         sa.text(
             f"""
@@ -74,27 +57,8 @@ def _backfill_user_organizations(connection: sa.Connection) -> None:
         )
     )
 
-    ambiguous_memberships = connection.execute(
-        sa.text(
-            f"""
-            SELECT m.user_id, COUNT(DISTINCT m.organization_id) AS organization_count
-            FROM {MEMBERSHIPS} AS m
-            JOIN {USERS} AS u ON u.id = m.user_id
-            WHERE m.deleted_at IS NULL
-              AND u.is_super_admin = FALSE
-              AND u.organization_id IS NULL
-            GROUP BY m.user_id
-            HAVING COUNT(DISTINCT m.organization_id) > 1
-            """
-        )
-    ).mappings().all()
-    if ambiguous_memberships:
-        users = ", ".join(str(row["user_id"]) for row in ambiguous_memberships[:10])
-        raise RuntimeError(
-            "Cannot remove memberships: legacy users belong to multiple organizations: "
-            f"{users}"
-        )
-
+    # Membership is only a fallback for legacy users that do not have an
+    # active role assignment. Prefer active memberships, then the latest row.
     connection.execute(
         sa.text(
             f"""
@@ -121,8 +85,30 @@ def _backfill_user_organizations(connection: sa.Connection) -> None:
         )
     )
 
+    # Super Admin is platform-wide and never belongs to an organization.
     connection.execute(
         sa.text(f"UPDATE {USERS} SET organization_id=NULL WHERE is_super_admin=TRUE")
+    )
+
+    # The new model permits exactly one organization per normal user. Retain
+    # only active role assignments for the organization selected above.
+    connection.execute(
+        sa.text(
+            f"""
+            UPDATE {USER_ROLES} AS ur
+            SET status='revoked', revoked_at=CURRENT_TIMESTAMP
+            WHERE ur.status='active'
+              AND ur.revoked_at IS NULL
+              AND EXISTS (
+                  SELECT 1
+                  FROM {USERS} AS u
+                  WHERE u.id=ur.user_id
+                    AND u.is_super_admin=FALSE
+                    AND u.organization_id IS NOT NULL
+                    AND u.organization_id <> ur.organization_id
+              )
+            """
+        )
     )
 
 
