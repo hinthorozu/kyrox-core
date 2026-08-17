@@ -16,17 +16,21 @@ Before changing Core code, read the applicable canonical sources:
 When the Core change is required by a Fair CRM feature, permission or integration, also read and follow:
 
 4. `kyrox-platform/projects/fair-crm/DEVELOPMENT_STANDARD.md`
-5. `kyrox-platform/projects/fair-crm/PERMISSION_SCOPE_GOVERNANCE.md` for permission/RBAC changes
+5. `kyrox-platform/projects/fair-crm/FEATURE_APPLICABILITY_STANDARD.md`
+6. `kyrox-platform/projects/fair-crm/PERMISSION_SCOPE_GOVERNANCE.md` for permission/RBAC changes
 
 Hard rules:
 
 - Keep Core product-agnostic.
 - Do not add Fair CRM domain logic to Core.
+- Classify applicability before implementation; do not invent UI, CRUD or end-user RBAC for internal platform services.
+- Every N/A delivery area needs a concrete architectural reason in the owning feature contract.
 - Do not guess permission scope.
 - Super Admin access remains central DB-backed bypass, not an organization role grant.
 - SYSTEM permissions never become assignable to organization roles.
 - ORGANIZATION permission changes must preserve tenant-scoped authorization and role governance.
-- New security behavior is incomplete until real-runtime authorization is verified.
+- User/JWT runtime authorization evidence is required only where that authorization boundary is applicable; internal workers still require their own trust, tenant, audit and test controls.
+- New security behavior is incomplete until the applicable real-runtime path is verified.
 - Do not rewrite old applied migrations; add a new migration for behavior/security changes.
 
-If a Fair CRM-driven change cannot satisfy the Delivery Contract or has an ambiguous security/product decision, stop and ask before implementation.
+If a Fair CRM-driven change cannot satisfy the Delivery Contract / Feature Profile or has an ambiguous security/product decision, stop and ask before implementation.
