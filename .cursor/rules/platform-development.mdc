@@ -17,7 +17,8 @@ When the Core change is required by a Fair CRM feature, permission or integratio
 
 4. `kyrox-platform/projects/fair-crm/DEVELOPMENT_STANDARD.md`
 5. `kyrox-platform/projects/fair-crm/FEATURE_APPLICABILITY_STANDARD.md`
-6. `kyrox-platform/projects/fair-crm/PERMISSION_SCOPE_GOVERNANCE.md` for permission/RBAC changes
+6. `kyrox-platform/projects/fair-crm/QUALITY_GATE_STANDARD.md`
+7. `kyrox-platform/projects/fair-crm/PERMISSION_SCOPE_GOVERNANCE.md` for permission/RBAC changes
 
 Hard rules:
 
@@ -31,6 +32,7 @@ Hard rules:
 - ORGANIZATION permission changes must preserve tenant-scoped authorization and role governance.
 - User/JWT runtime authorization evidence is required only where that authorization boundary is applicable; internal workers still require their own trust, tenant, audit and test controls.
 - New security behavior is incomplete until the applicable real-runtime path is verified.
+- Known quality baselines may shrink only; never add a new failing check to make CI green.
 - Do not rewrite old applied migrations; add a new migration for behavior/security changes.
 
 If a Fair CRM-driven change cannot satisfy the Delivery Contract / Feature Profile or has an ambiguous security/product decision, stop and ask before implementation.
