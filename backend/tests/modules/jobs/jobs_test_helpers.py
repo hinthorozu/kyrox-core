@@ -15,7 +15,6 @@ from app.modules.identity.domain.authentication.value_objects.security.email imp
 from app.modules.identity.domain.authorization.entities import (
     Permission,
     PermissionGroup,
-    Role,
     RolePermission,
     UserRole,
 )
@@ -25,7 +24,6 @@ from app.modules.identity.domain.authorization.value_objects.identity import (
     OrganizationId,
     PermissionGroupId,
     PermissionId,
-    RoleId,
     UserRoleId,
 )
 from app.modules.identity.domain.authorization.value_objects.rbac import (
@@ -48,14 +46,10 @@ from app.modules.identity.infrastructure.authorization.repositories import (
     SqlAlchemyPermissionGroupRepository,
     SqlAlchemyPermissionRepository,
     SqlAlchemyRolePermissionRepository,
-    SqlAlchemyRoleRepository,
     SqlAlchemyUserRoleRepository,
 )
 from app.modules.identity.infrastructure.organization.repositories import SqlAlchemyOrganizationRepository
-
-
-def _now():
-    return datetime.now(UTC)
+from app.modules.identity.infrastructure.persistence.models import UserModel
 
 
 def seed_user_with_job_permissions(
@@ -93,6 +87,10 @@ def seed_user_with_job_permissions(
             updated_at=now,
         )
     )
+    user_model = db_session.get(UserModel, user.id.value)
+    assert user_model is not None
+    user_model.organization_id = org.id.value
+
     role = role_repo.get_by_slug(RoleSlug.create("member"), RoleScope.ORGANIZATION)
     assert role is not None
     group = group_repo.add(
