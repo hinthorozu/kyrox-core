@@ -9,9 +9,6 @@ from sqlalchemy.pool import StaticPool
 from app.db.base import Base
 from app.db.session import get_db
 from app.main import create_app
-from app.modules.identity.infrastructure.membership.persistence.models.membership_invite import (  # noqa: F401
-    MembershipInviteModel,
-)
 from app.modules.identity.infrastructure.persistence import models as identity_models  # noqa: F401
 
 

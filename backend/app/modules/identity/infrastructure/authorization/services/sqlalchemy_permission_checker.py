@@ -27,7 +27,7 @@ class SqlAlchemyPermissionChecker:
         organization_id: OrganizationId,
         permission_code: PermissionCode,
     ) -> bool:
-        """Resolve organization access from direct ownership plus RBAC."""
+        """Resolve an organization-scoped permission from the active RBAC graph."""
         stmt = (
             select(PermissionModel.id)
             .join(
@@ -40,7 +40,6 @@ class SqlAlchemyPermissionChecker:
             .join(OrganizationModel, OrganizationModel.id == UserRoleModel.organization_id)
             .where(
                 UserModel.id == user_id.value,
-                UserModel.organization_id == organization_id.value,
                 UserModel.status == "active",
                 UserModel.deleted_at.is_(None),
                 UserModel.is_super_admin.is_(False),

@@ -22,4 +22,5 @@ class SqlAlchemyPlatformUserReader:
             is_active=UserStatus(model.status) is UserStatus.ACTIVE,
             is_super_admin=model.is_super_admin,
             is_deleted=model.deleted_at is not None,
+            organization_id=model.organization_id,
         )

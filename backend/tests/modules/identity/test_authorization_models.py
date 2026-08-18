@@ -39,6 +39,7 @@ def test_identity_permission_table_metadata() -> None:
         "is_system",
         "lifecycle_state",
         "is_assignable",
+        "permission_scope",
         "lifecycle_reason",
         "lifecycle_changed_at",
         "lifecycle_changed_by",

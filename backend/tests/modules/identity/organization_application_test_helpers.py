@@ -5,19 +5,11 @@ from app.modules.identity.domain.authentication.entities.user import User
 from app.modules.identity.domain.authentication.value_objects.identity.user_id import UserId
 from app.modules.identity.domain.authentication.value_objects.security.email import Email
 from app.modules.identity.domain.authorization.entities.role import Role
-from app.modules.identity.domain.authorization.entities.user_role import UserRole
 from app.modules.identity.domain.authorization.enums.role_scope import RoleScope
-from app.modules.identity.domain.authorization.value_objects.identity.organization_id import OrganizationId
 from app.modules.identity.domain.authorization.value_objects.identity.role_id import RoleId
-from app.modules.identity.domain.authorization.value_objects.identity.user_role_id import UserRoleId
 from app.modules.identity.domain.authorization.value_objects.rbac.role_slug import RoleSlug
-from app.modules.identity.domain.membership.entities.membership import Membership
-from app.modules.identity.domain.membership.entities.membership_invite import MembershipInvite
-from app.modules.identity.domain.membership.value_objects.identity.invite_id import InviteId
-from app.modules.identity.domain.membership.value_objects.identity.membership_id import MembershipId
-from app.modules.identity.domain.membership.value_objects.invite.invite_token_hash import InviteTokenHash
 from app.modules.identity.domain.organization.entities.organization import Organization
-from app.modules.identity.domain.organization.value_objects.identity.organization_id import OrganizationId as OrgId
+from app.modules.identity.domain.organization.value_objects.identity.organization_id import OrganizationId
 from app.modules.identity.domain.organization.value_objects.profile.organization_slug import OrganizationSlug
 
 
@@ -84,13 +76,13 @@ class InMemoryOrganizationRepository:
         self._by_id[organization.id.value] = organization
         return organization
 
-    def remove(self, organization_id: OrgId) -> None:
+    def remove(self, organization_id: OrganizationId) -> None:
         organization = self._by_id.pop(organization_id.value, None)
         if organization is not None:
             self._slugs.discard(organization.slug.value)
             self.items = [item for item in self.items if item.id.value != organization_id.value]
 
-    def get_by_id(self, organization_id: OrgId) -> Organization | None:
+    def get_by_id(self, organization_id: OrganizationId) -> Organization | None:
         return self._by_id.get(organization_id.value)
 
     def get_by_slug(self, slug: OrganizationSlug) -> Organization | None:
@@ -101,105 +93,6 @@ class InMemoryOrganizationRepository:
 
     def exists_by_slug(self, slug: OrganizationSlug) -> bool:
         return slug.value in self._slugs
-
-
-class InMemoryMembershipRepository:
-    def __init__(self) -> None:
-        self.items: list[Membership] = []
-
-    def add(self, membership: Membership) -> Membership:
-        self.items.append(membership)
-        return membership
-
-    def update(self, membership: Membership) -> Membership:
-        for index, current in enumerate(self.items):
-            if current.id.value == membership.id.value:
-                self.items[index] = membership
-                return membership
-        self.items.append(membership)
-        return membership
-
-    def remove(self, membership_id: MembershipId) -> None:
-        self.items = [item for item in self.items if item.id.value != membership_id.value]
-
-    def get_by_id(self, membership_id: MembershipId) -> Membership | None:
-        for membership in self.items:
-            if membership.id.value == membership_id.value:
-                return membership
-        return None
-
-    def get_by_user_and_organization(
-        self,
-        user_id: UserId,
-        organization_id: OrganizationId,
-    ) -> Membership | None:
-        for membership in self.items:
-            if (
-                membership.user_id.value == user_id.value
-                and membership.organization_id.value == organization_id.value
-            ):
-                return membership
-        return None
-
-    def list_by_user_id(self, user_id: UserId) -> list[Membership]:
-        return [item for item in self.items if item.user_id.value == user_id.value]
-
-    def list_by_organization_id(self, organization_id: OrganizationId) -> list[Membership]:
-        return [
-            item for item in self.items if item.organization_id.value == organization_id.value
-        ]
-
-    def list_effective_by_organization_id(
-        self,
-        organization_id: OrganizationId,
-    ) -> list[Membership]:
-        return [
-            item
-            for item in self.items
-            if item.organization_id.value == organization_id.value and item.is_effective()
-        ]
-
-
-class InMemoryMembershipInviteRepository:
-    def __init__(self) -> None:
-        self.items: list[MembershipInvite] = []
-
-    def add(self, invite: MembershipInvite) -> MembershipInvite:
-        self.items.append(invite)
-        return invite
-
-    def update(self, invite: MembershipInvite) -> MembershipInvite:
-        for index, current in enumerate(self.items):
-            if current.id.value == invite.id.value:
-                self.items[index] = invite
-                return invite
-        self.items.append(invite)
-        return invite
-
-    def remove(self, invite_id: InviteId) -> None:
-        self.items = [item for item in self.items if item.id.value != invite_id.value]
-
-    def get_by_id(self, invite_id: InviteId) -> MembershipInvite | None:
-        for invite in self.items:
-            if invite.id.value == invite_id.value:
-                return invite
-        return None
-
-    def get_pending_by_token_hash(self, token_hash: InviteTokenHash) -> MembershipInvite | None:
-        for invite in self.items:
-            if invite.token_hash.value == token_hash.value and invite.accepted_at is None:
-                return invite
-        return None
-
-    def list_pending_by_organization_id(
-        self,
-        organization_id: OrganizationId,
-    ) -> list[MembershipInvite]:
-        return [
-            invite
-            for invite in self.items
-            if invite.organization_id.value == organization_id.value and invite.accepted_at is None
-        ]
 
 
 class InMemoryRoleRepository:
@@ -230,51 +123,3 @@ class InMemoryRoleRepository:
 
     def list_system_roles(self) -> list[Role]:
         return [role for role in self.items if role.is_system]
-
-
-class InMemoryOrganizationRoleRepository:
-    def __init__(self) -> None:
-        self.items: list[object] = []
-
-
-class InMemoryUserRoleRepository:
-    def __init__(self) -> None:
-        self.items: list[UserRole] = []
-
-    def add(self, user_role: UserRole) -> UserRole:
-        self.items.append(user_role)
-        return user_role
-
-    def update(self, user_role: UserRole) -> UserRole:
-        return user_role
-
-    def remove(self, user_role_id: UserRoleId) -> None:
-        self.items = [item for item in self.items if item.id.value != user_role_id.value]
-
-    def get_by_id(self, user_role_id: UserRoleId) -> UserRole | None:
-        for item in self.items:
-            if item.id.value == user_role_id.value:
-                return item
-        return None
-
-    def list_effective_by_user_and_organization(
-        self,
-        user_id: UserId,
-        organization_id: OrganizationId,
-    ) -> list[UserRole]:
-        return [
-            item
-            for item in self.items
-            if (
-                item.user_id.value == user_id.value
-                and item.organization_id.value == organization_id.value
-                and item.is_effective()
-            )
-        ]
-
-    def revoke(self, user_role_id: UserRoleId) -> None:
-        for item in self.items:
-            if item.id.value == user_role_id.value:
-                from datetime import UTC
-
-                item.revoke(datetime.now(tz=UTC))

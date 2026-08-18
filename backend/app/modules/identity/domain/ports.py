@@ -1,9 +1,9 @@
-"""Legacy repository ports — use domain.organization and domain.membership ports for new code."""
+"""Legacy repository ports retained only for user/organization compatibility."""
 
 from typing import Protocol
 from uuid import UUID
 
-from app.modules.identity.domain.entities import Membership, Organization, User
+from app.modules.identity.domain.entities import Organization, User
 
 
 class UserRepository(Protocol):
@@ -28,23 +28,3 @@ class OrganizationRepository(Protocol):
     def update(self, organization: Organization) -> Organization: ...
 
     def soft_delete(self, organization_id: UUID) -> None: ...
-
-
-class MembershipRepository(Protocol):
-    def get_by_id(self, membership_id: UUID) -> Membership | None: ...
-
-    def get_by_user_and_organization(
-        self,
-        user_id: UUID,
-        organization_id: UUID,
-    ) -> Membership | None: ...
-
-    def list_by_user_id(self, user_id: UUID) -> list[Membership]: ...
-
-    def list_by_organization_id(self, organization_id: UUID) -> list[Membership]: ...
-
-    def create(self, membership: Membership) -> Membership: ...
-
-    def update(self, membership: Membership) -> Membership: ...
-
-    def soft_delete(self, membership_id: UUID) -> None: ...
