@@ -5,10 +5,8 @@ from uuid import UUID
 import jwt
 from fastapi import Depends, Header, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from sqlalchemy.orm import Session as DbSession
 
 from app.core.exceptions import AppException
-from app.db.session import get_db
 from app.modules.identity.api.authentication.dependencies import get_token_service
 from app.modules.identity.api.authorization.context import (
     AuthenticatedOrganizationContext,
@@ -31,7 +29,6 @@ from app.modules.identity.domain.authorization.value_objects.identity.organizati
     OrganizationId,
 )
 from app.modules.identity.domain.authorization.value_objects.identity.user_id import UserId
-from app.modules.identity.infrastructure.persistence.models import UserModel
 
 _bearer_scheme = HTTPBearer(auto_error=False)
 
@@ -88,22 +85,16 @@ def _assert_organization_access(
     claims: AccessTokenClaims,
     organization_id: UUID,
     platform_user_reader: PlatformUserReader,
-    db: DbSession,
 ) -> bool:
-    """Validate direct user -> organization ownership.
-
-    Super Admin is organization-independent. Every other active user belongs to
-    exactly one organization through identity_users.organization_id.
-    """
-    if is_super_admin(claims.sub.value, platform_user_reader):
+    """Validate direct user -> organization ownership using the user read port."""
+    snapshot = platform_user_reader.get_snapshot(UserId(claims.sub.value))
+    if snapshot is not None and snapshot.is_super_admin:
         return True
 
-    user = db.get(UserModel, claims.sub.value)
     if (
-        user is None
-        or user.deleted_at is not None
-        or user.status != "active"
-        or user.organization_id != organization_id
+        snapshot is None
+        or not snapshot.can_be_authorized()
+        or snapshot.organization_id != organization_id
     ):
         raise AppException("Forbidden", status_code=status.HTTP_403_FORBIDDEN)
     return False
@@ -114,13 +105,11 @@ def require_organization_access() -> Callable[..., AuthenticatedOrganizationCont
         claims: AccessTokenClaims = Depends(get_access_token_claims),
         organization_id: UUID = Depends(get_organization_id),
         platform_user_reader: PlatformUserReader = Depends(get_platform_user_reader),
-        db: DbSession = Depends(get_db),
     ) -> AuthenticatedOrganizationContext:
         actor_is_super_admin = _assert_organization_access(
             claims,
             organization_id,
             platform_user_reader,
-            db,
         )
         return AuthenticatedOrganizationContext(
             user_id=claims.sub.value,
