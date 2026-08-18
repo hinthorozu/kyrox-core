@@ -33,7 +33,7 @@ def test_super_admin_creates_organization_without_membership(client: TestClient,
     body = response.json()
     assert body["organization"]["slug"] == slug
     assert body["organization"]["status"] == "active"
-    assert body["membership_id"] is None
+    assert "membership_id" not in body
 
 
 def test_get_organization_requires_permission(client: TestClient, db_session: Session) -> None:
