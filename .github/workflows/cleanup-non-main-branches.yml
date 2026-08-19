@@ -1,5 +1,6 @@
 name: Cleanup Non-Main Branches
 
+# Manual cleanup hook: when explicitly requested, touching this file triggers cleanup.
 on:
   workflow_dispatch:
   push:
