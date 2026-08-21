@@ -154,6 +154,15 @@ def test_mail_send_permissions_are_org_scoped_and_preserve_existing_access(
 
     engine = sa.create_engine(alembic_config.get_main_option("sqlalchemy.url"))
     with engine.connect() as connection:
+        group = connection.execute(
+            text(
+                """
+                SELECT name, module, description, sort_order, is_system
+                FROM identity_permission_groups
+                WHERE code='fair_crm.mail_send_operations'
+                """
+            )
+        ).one()
         rows = connection.execute(
             text(
                 """
@@ -193,6 +202,13 @@ def test_mail_send_permissions_are_org_scoped_and_preserve_existing_access(
             text("SELECT COUNT(*) FROM identity_permissions WHERE code='fair_crm.email_accounts.execute'")
         ).scalar_one()
 
+    assert group == (
+        "FAIR CRM Mail Send Operations",
+        "fair_crm",
+        "FAIR CRM mail send operation permissions",
+        70,
+        1,
+    )
     assert rows == [
         (EXECUTE_CODE, "fair_crm.mail_send_operations", "active", 1, "organization"),
         (READ_CODE, "fair_crm.mail_send_operations", "active", 1, "organization"),
