@@ -12,7 +12,7 @@ class NotificationRepository(Protocol):
 
     def find_by_idempotency(
         self,
-        organization_id: UUID,
+        organization_id: UUID | None,
         idempotency_key: str,
     ) -> Notification | None: ...
 
@@ -32,7 +32,7 @@ class NotificationSettingsReader(Protocol):
 @dataclass(frozen=True, slots=True)
 class ChannelDispatchRequest:
     notification_id: UUID
-    organization_id: UUID
+    organization_id: UUID | None
     channel: NotificationChannel
     recipient: Recipient
     subject: str
