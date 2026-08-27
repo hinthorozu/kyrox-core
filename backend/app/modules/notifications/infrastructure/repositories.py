@@ -24,14 +24,16 @@ class SqlAlchemyNotificationRepository:
 
     def find_by_idempotency(
         self,
-        organization_id: UUID,
+        organization_id: UUID | None,
         idempotency_key: str,
     ) -> Notification | None:
-        stmt = (
-            select(PlatformNotificationModel)
-            .where(PlatformNotificationModel.organization_id == organization_id)
-            .where(PlatformNotificationModel.idempotency_key == idempotency_key)
+        stmt = select(PlatformNotificationModel).where(
+            PlatformNotificationModel.idempotency_key == idempotency_key
         )
+        if organization_id is None:
+            stmt = stmt.where(PlatformNotificationModel.organization_id.is_(None))
+        else:
+            stmt = stmt.where(PlatformNotificationModel.organization_id == organization_id)
         model = self._session.scalars(stmt).first()
         if model is None:
             return None
