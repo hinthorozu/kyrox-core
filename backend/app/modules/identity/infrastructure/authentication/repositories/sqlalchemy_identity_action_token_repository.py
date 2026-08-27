@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from sqlalchemy import select, update
 from sqlalchemy.orm import Session as DbSession
 
@@ -60,7 +62,7 @@ class SqlAlchemyIdentityActionTokenRepository:
         self,
         token_hash: TokenHash,
         purpose: IdentityActionTokenPurpose,
-        consumed_at,
+        consumed_at: datetime,
     ) -> IdentityActionToken | None:
         stmt = (
             update(IdentityActionTokenModel)
@@ -83,7 +85,7 @@ class SqlAlchemyIdentityActionTokenRepository:
         self,
         user_id: UserId,
         purpose: IdentityActionTokenPurpose,
-        invalidated_at,
+        invalidated_at: datetime,
     ) -> int:
         stmt = (
             update(IdentityActionTokenModel)
