@@ -49,6 +49,8 @@ from app.modules.identity.domain.organization.value_objects.identity.organizatio
     OrganizationId,
 )
 
+# This protected system role predates the stricter RoleSlug.create() policy and
+# is intentionally stored with an underscore by migration 20260815_0052.
 _ORGANIZATION_ADMIN_ROLE_SLUG = "organization_admin"
 
 
@@ -153,7 +155,7 @@ class PublicSignupUseCase:
         )
 
         organization_admin = self._role_repository.get_by_slug(
-            RoleSlug.create(_ORGANIZATION_ADMIN_ROLE_SLUG),
+            RoleSlug(value=_ORGANIZATION_ADMIN_ROLE_SLUG),
             RoleScope.ORGANIZATION,
         )
         if (
