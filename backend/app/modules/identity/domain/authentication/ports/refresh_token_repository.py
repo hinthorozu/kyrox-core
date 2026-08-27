@@ -5,6 +5,7 @@ from app.modules.identity.domain.authentication.value_objects.identity.refresh_t
     RefreshTokenId,
 )
 from app.modules.identity.domain.authentication.value_objects.identity.session_id import SessionId
+from app.modules.identity.domain.authentication.value_objects.identity.user_id import UserId
 from app.modules.identity.domain.authentication.value_objects.security.token_hash import TokenHash
 
 
@@ -20,3 +21,5 @@ class RefreshTokenRepository(Protocol):
     def get_by_token_hash(self, token_hash: TokenHash) -> RefreshToken | None: ...
 
     def get_active_by_session_id(self, session_id: SessionId) -> RefreshToken | None: ...
+
+    def get_active_by_user_id(self, user_id: UserId) -> list[RefreshToken]: ...
