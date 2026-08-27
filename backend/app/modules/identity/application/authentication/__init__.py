@@ -10,6 +10,10 @@ from app.modules.identity.application.authentication.logout import LogoutUseCase
 from app.modules.identity.application.authentication.policy import TokenPolicy
 from app.modules.identity.application.authentication.refresh_session import RefreshSessionUseCase
 from app.modules.identity.application.authentication.results import AuthTokenPairResult
+from app.modules.identity.application.authentication.revoke_all_user_sessions import (
+    RevokeAllUserSessionsResult,
+    RevokeAllUserSessionsUseCase,
+)
 
 __all__ = [
     "AuthTokenPairResult",
@@ -21,6 +25,8 @@ __all__ = [
     "LogoutUseCase",
     "RefreshSessionCommand",
     "RefreshSessionUseCase",
+    "RevokeAllUserSessionsResult",
+    "RevokeAllUserSessionsUseCase",
     "TokenPolicy",
     "Uuid4IdGenerator",
 ]

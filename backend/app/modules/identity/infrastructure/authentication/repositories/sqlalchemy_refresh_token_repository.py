@@ -7,6 +7,7 @@ from app.modules.identity.domain.authentication.value_objects.identity.refresh_t
     RefreshTokenId,
 )
 from app.modules.identity.domain.authentication.value_objects.identity.session_id import SessionId
+from app.modules.identity.domain.authentication.value_objects.identity.user_id import UserId
 from app.modules.identity.domain.authentication.value_objects.security.token_hash import TokenHash
 from app.modules.identity.infrastructure.authentication.persistence.mappers.refresh_token_mapper import (
     RefreshTokenMapper,
@@ -14,6 +15,7 @@ from app.modules.identity.infrastructure.authentication.persistence.mappers.refr
 from app.modules.identity.infrastructure.authentication.persistence.models.refresh_token import (
     RefreshTokenModel,
 )
+from app.modules.identity.infrastructure.authentication.persistence.models.session import SessionModel
 
 
 class SqlAlchemyRefreshTokenRepository:
@@ -76,3 +78,21 @@ class SqlAlchemyRefreshTokenRepository:
         if model is None:
             return None
         return RefreshTokenMapper.to_domain(model)
+
+    def get_active_by_user_id(self, user_id: UserId) -> list[RefreshToken]:
+        now = self._clock.now()
+        stmt = (
+            select(RefreshTokenModel)
+            .join(SessionModel, SessionModel.id == RefreshTokenModel.session_id)
+            .where(
+                SessionModel.user_id == user_id.value,
+                RefreshTokenModel.revoked_at.is_(None),
+                RefreshTokenModel.used_at.is_(None),
+                RefreshTokenModel.expires_at > now,
+            )
+            .order_by(RefreshTokenModel.created_at.asc())
+        )
+        return [
+            RefreshTokenMapper.to_domain(model)
+            for model in self._session.scalars(stmt).all()
+        ]
