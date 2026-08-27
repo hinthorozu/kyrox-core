@@ -2,6 +2,7 @@ import re
 from dataclasses import dataclass
 
 _ROLE_SLUG_PATTERN = re.compile(r"^[a-z][a-z0-9-]{1,63}$")
+_LEGACY_PROTECTED_ROLE_SLUGS = frozenset({"organization_admin"})
 
 
 @dataclass(frozen=True, slots=True)
@@ -11,6 +12,8 @@ class RoleSlug:
     @classmethod
     def create(cls, raw: str) -> "RoleSlug":
         normalized = raw.strip().lower()
+        if normalized in _LEGACY_PROTECTED_ROLE_SLUGS:
+            return cls(value=normalized)
         if not normalized or not _ROLE_SLUG_PATTERN.match(normalized):
             raise ValueError("Invalid role slug")
         return cls(value=normalized)

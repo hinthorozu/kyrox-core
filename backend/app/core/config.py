@@ -1,4 +1,4 @@
-﻿from pathlib import Path
+from pathlib import Path
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -22,6 +22,19 @@ class Settings(BaseSettings):
     # Access JWT lifetime in days (Fair CRM session alignment).
     ACCESS_TOKEN_EXPIRE_DAYS: int = 15
     REFRESH_TOKEN_EXPIRE_DAYS: int = 15
+
+    # Dedicated secret for reconstructable, hash-only persisted identity action
+    # tokens used by asynchronous identity-email delivery.
+    CORE_IDENTITY_ACTION_TOKEN_SECRET_KEY: str = (
+        "dev-insecure-identity-action-token-secret-change-me"
+    )
+    CORE_IDENTITY_ACTION_TOKEN_TTL_HOURS: int = 24
+    CORE_IDENTITY_ACTIVATION_URL_TEMPLATE: str = (
+        "http://localhost:3000/activate?token={token}"
+    )
+    CORE_IDENTITY_PASSWORD_RESET_URL_TEMPLATE: str = (
+        "http://localhost:3000/reset-password?token={token}"
+    )
 
     # Core-owned identity/platform email. These credentials are deliberately
     # separate from product/tenant mail accounts such as FAIR CRM providers.

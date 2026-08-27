@@ -9,6 +9,7 @@ from app.modules.jobs.domain.ports import JobHandler, JobHandlerResult
 from app.modules.notifications.application.commands import DispatchNotificationCommand
 from app.modules.notifications.application.dispatch_notification import DispatchNotificationUseCase
 from app.modules.notifications.application.policy import NotificationPolicy
+from app.modules.notifications.application.ports.content_renderer import NotificationContentRenderer
 from app.modules.notifications.domain.ports import NotificationChannelRegistry
 from app.modules.notifications.infrastructure.jobs.handler_context import get_notification_handler_session
 from app.modules.notifications.infrastructure.repositories import SqlAlchemyNotificationRepository
@@ -22,6 +23,7 @@ from app.modules.settings.infrastructure.repositories import SqlAlchemySettingRe
 def build_dispatch_notification_use_case(
     session: DbSession,
     channel_registry: NotificationChannelRegistry,
+    content_renderer: NotificationContentRenderer | None = None,
 ) -> DispatchNotificationUseCase:
     setting_reader = SettingRepositoryOrganizationSettingReader(
         SqlAlchemySettingRepository(session)
@@ -31,6 +33,7 @@ def build_dispatch_notification_use_case(
         channel_registry=channel_registry,
         settings_reader=NotificationSettingsReaderAdapter(setting_reader),
         notification_policy=NotificationPolicy(),
+        content_renderer=content_renderer,
     )
 
 
@@ -40,9 +43,11 @@ class NotificationDispatchJobHandler(JobHandler):
         *,
         session_factory: Callable[[], DbSession],
         channel_registry: NotificationChannelRegistry,
+        content_renderer_factory: Callable[[DbSession], NotificationContentRenderer] | None = None,
     ) -> None:
         self._session_factory = session_factory
         self._channel_registry = channel_registry
+        self._content_renderer_factory = content_renderer_factory
 
     def handle(self, job: Job) -> JobHandlerResult:
         raw_notification_id = job.payload.get("notification_id")
@@ -54,8 +59,19 @@ class NotificationDispatchJobHandler(JobHandler):
         session = shared_session if shared_session is not None else self._session_factory()
         owns_session = shared_session is None
         try:
-            use_case = build_dispatch_notification_use_case(session, self._channel_registry)
-            result = use_case.execute(DispatchNotificationCommand(notification_id=notification_id))
+            content_renderer = (
+                self._content_renderer_factory(session)
+                if self._content_renderer_factory is not None
+                else None
+            )
+            use_case = build_dispatch_notification_use_case(
+                session,
+                self._channel_registry,
+                content_renderer,
+            )
+            result = use_case.execute(
+                DispatchNotificationCommand(notification_id=notification_id)
+            )
             if owns_session:
                 session.commit()
             return JobHandlerResult(

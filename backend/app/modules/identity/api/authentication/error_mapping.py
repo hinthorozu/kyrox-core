@@ -6,6 +6,11 @@ from app.modules.identity.domain.authentication.exceptions import (
     InvalidRefreshTokenError,
     LockedUserError,
 )
+from app.modules.identity.domain.authentication.exceptions.authentication import (
+    PublicSignupConflictError,
+    PublicSignupProvisioningError,
+    PublicSignupValidationError,
+)
 
 
 def map_authentication_error(exc: AuthenticationError) -> AppException:
@@ -17,4 +22,13 @@ def map_authentication_error(exc: AuthenticationError) -> AppException:
         return AppException(str(exc), status_code=403)
     if isinstance(exc, InvalidRefreshTokenError):
         return AppException("Invalid refresh token", status_code=401)
+    if isinstance(exc, PublicSignupValidationError):
+        return AppException("Invalid signup details", status_code=422)
+    if isinstance(exc, PublicSignupConflictError):
+        return AppException(
+            "An account with the supplied details already exists",
+            status_code=409,
+        )
+    if isinstance(exc, PublicSignupProvisioningError):
+        return AppException("Signup is temporarily unavailable", status_code=503)
     return AppException(str(exc), status_code=401)

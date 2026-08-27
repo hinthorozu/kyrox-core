@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 
 from app.modules.identity.application.authentication.id_generator import IdGenerator
 from app.modules.identity.domain.authentication.entities.identity_action_token import (
@@ -10,7 +10,10 @@ from app.modules.identity.domain.authentication.enums.identity_action_token_purp
 )
 from app.modules.identity.domain.authentication.exceptions.identity_action_token import (
     IdentityActionTokenConsumedError,
+    IdentityActionTokenExpiredError,
+    IdentityActionTokenInvalidatedError,
     IdentityActionTokenNotFoundError,
+    IdentityActionTokenPurposeMismatchError,
 )
 from app.modules.identity.domain.authentication.ports.clock import Clock
 from app.modules.identity.domain.authentication.ports.identity_action_token_repository import (
@@ -27,6 +30,7 @@ from app.modules.identity.domain.authentication.value_objects.identity.user_id i
 
 @dataclass(frozen=True, slots=True)
 class IssuedIdentityActionToken:
+    token_id: IdentityActionTokenId
     raw_token: str
     expires_at: datetime
 
@@ -49,12 +53,19 @@ class IssueIdentityActionToken:
         user_id: UserId,
         purpose: IdentityActionTokenPurpose,
         ttl: timedelta,
+        *,
+        reconstructable: bool = False,
     ) -> IssuedIdentityActionToken:
         if ttl <= timedelta(0):
             raise ValueError("Identity action token TTL must be positive")
 
         now = self._clock.now()
-        raw_token = self._token_service.generate()
+        token_id = IdentityActionTokenId(self._id_generator.generate_uuid())
+        raw_token = (
+            self._token_service.derive(token_id)
+            if reconstructable
+            else self._token_service.generate()
+        )
         token_hash = self._token_service.hash(raw_token)
         expires_at = now + ttl
 
@@ -64,7 +75,7 @@ class IssueIdentityActionToken:
             now,
         )
         token = IdentityActionToken(
-            id=IdentityActionTokenId(self._id_generator.generate_uuid()),
+            id=token_id,
             user_id=user_id,
             purpose=purpose,
             token_hash=token_hash,
@@ -72,7 +83,65 @@ class IssueIdentityActionToken:
             created_at=now,
         )
         self._repository.add(token)
-        return IssuedIdentityActionToken(raw_token=raw_token, expires_at=expires_at)
+        return IssuedIdentityActionToken(
+            token_id=token_id,
+            raw_token=raw_token,
+            expires_at=expires_at,
+        )
+
+
+class MaterializeIdentityActionToken:
+    def __init__(
+        self,
+        repository: IdentityActionTokenRepository,
+        token_service: IdentityActionTokenService,
+        clock: Clock,
+    ) -> None:
+        self._repository = repository
+        self._token_service = token_service
+        self._clock = clock
+
+    def execute(
+        self,
+        token_id: IdentityActionTokenId,
+        expected_purpose: IdentityActionTokenPurpose,
+    ) -> str:
+        token = self._repository.get_by_id(token_id)
+        if token is None:
+            raise IdentityActionTokenNotFoundError("Identity action token not found")
+        if token.purpose is not expected_purpose:
+            raise IdentityActionTokenPurposeMismatchError(
+                "Identity action token purpose mismatch"
+            )
+        if token.invalidated_at is not None:
+            raise IdentityActionTokenInvalidatedError(
+                "Identity action token is invalidated"
+            )
+        if token.consumed_at is not None:
+            raise IdentityActionTokenConsumedError(
+                "Identity action token was already consumed"
+            )
+
+        now = self._clock.now()
+        expires_at = token.expires_at
+        # SQLite loses timezone information for DateTime columns in tests while
+        # production PostgreSQL preserves it. Persisted identity timestamps are
+        # UTC, so normalize the SQLite round-trip before comparing.
+        if expires_at.tzinfo is None:
+            expires_at = expires_at.replace(tzinfo=UTC)
+        if now.tzinfo is None:
+            now = now.replace(tzinfo=UTC)
+        if now >= expires_at:
+            raise IdentityActionTokenExpiredError(
+                "Identity action token has expired"
+            )
+
+        raw_token = self._token_service.derive(token_id)
+        if self._token_service.hash(raw_token) != token.token_hash:
+            raise IdentityActionTokenNotFoundError(
+                "Identity action token could not be materialized"
+            )
+        return raw_token
 
 
 class ConsumeIdentityActionToken:
@@ -106,4 +175,6 @@ class ConsumeIdentityActionToken:
             raise IdentityActionTokenNotFoundError("Identity action token not found")
 
         token.consume(now, expected_purpose)
-        raise IdentityActionTokenConsumedError("Identity action token could not be consumed")
+        raise IdentityActionTokenConsumedError(
+            "Identity action token could not be consumed"
+        )

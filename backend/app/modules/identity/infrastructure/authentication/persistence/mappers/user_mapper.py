@@ -1,5 +1,3 @@
-from uuid import UUID
-
 from app.modules.identity.domain.authentication.entities.user import User
 from app.modules.identity.domain.authentication.enums.user_status import UserStatus
 from app.modules.identity.domain.authentication.value_objects.identity.user_id import UserId
@@ -21,6 +19,8 @@ class UserMapper:
             created_at=model.created_at,
             updated_at=model.updated_at,
             deleted_at=model.deleted_at,
+            organization_id=model.organization_id,
+            is_super_admin=model.is_super_admin,
         )
 
     @staticmethod
@@ -30,6 +30,8 @@ class UserMapper:
             email=entity.email.value,
             password_hash=entity.password_hash.value if entity.password_hash else None,
             status=entity.status.value,
+            is_super_admin=entity.is_super_admin,
+            organization_id=entity.organization_id,
             created_at=entity.created_at,
             updated_at=entity.updated_at,
             deleted_at=entity.deleted_at,
@@ -40,5 +42,7 @@ class UserMapper:
         model.email = entity.email.value
         model.password_hash = entity.password_hash.value if entity.password_hash else None
         model.status = entity.status.value
+        model.is_super_admin = entity.is_super_admin
+        model.organization_id = entity.organization_id
         model.updated_at = entity.updated_at
         model.deleted_at = entity.deleted_at

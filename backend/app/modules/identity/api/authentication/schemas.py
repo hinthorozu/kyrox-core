@@ -14,6 +14,16 @@ class LogoutRequest(BaseModel):
     refresh_token: str = Field(min_length=1)
 
 
+class PublicSignupRequest(BaseModel):
+    organization_name: str = Field(min_length=1, max_length=255)
+    email: EmailStr
+    organization_slug: str | None = Field(default=None, min_length=2, max_length=255)
+
+
+class PublicSignupResponse(BaseModel):
+    message: str
+
+
 class TokenResponse(BaseModel):
     access_token: str
     refresh_token: str

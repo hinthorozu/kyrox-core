@@ -3,6 +3,10 @@ from uuid import UUID
 
 from app.modules.notifications.application.commands import DispatchNotificationCommand
 from app.modules.notifications.application.policy import NotificationPolicy
+from app.modules.notifications.application.ports.content_renderer import (
+    NotificationContentRenderer,
+    RenderedNotificationContent,
+)
 from app.modules.notifications.application.results import DispatchNotificationResult
 from app.modules.notifications.domain.entities import Notification
 from app.modules.notifications.domain.exceptions import (
@@ -29,11 +33,13 @@ class DispatchNotificationUseCase:
         channel_registry: NotificationChannelRegistry,
         settings_reader: NotificationSettingsReader,
         notification_policy: NotificationPolicy,
+        content_renderer: NotificationContentRenderer | None = None,
     ) -> None:
         self._notification_repository = notification_repository
         self._channel_registry = channel_registry
         self._settings_reader = settings_reader
         self._notification_policy = notification_policy
+        self._content_renderer = content_renderer
 
     def execute(self, command: DispatchNotificationCommand) -> DispatchNotificationResult:
         notification = self._notification_repository.get_by_id(command.notification_id)
@@ -82,18 +88,18 @@ class DispatchNotificationUseCase:
                 idempotent_noop=False,
             )
 
-        request = ChannelDispatchRequest(
-            notification_id=notification.id,
-            organization_id=notification.organization_id,
-            channel=notification.channel,
-            recipient=notification.recipient,
-            subject=notification.subject,
-            body=notification.body,
-            from_address=settings.email_from,
-            template_key=notification.template_key,
-        )
-
         try:
+            rendered = self._render_content(notification)
+            request = ChannelDispatchRequest(
+                notification_id=notification.id,
+                organization_id=notification.organization_id,
+                channel=notification.channel,
+                recipient=notification.recipient,
+                subject=rendered.subject,
+                body=rendered.body,
+                from_address=settings.email_from,
+                template_key=notification.template_key,
+            )
             adapter.send(request)
         except NotificationDispatchError as exc:
             failed = self._transition(
@@ -108,11 +114,14 @@ class DispatchNotificationUseCase:
                 status=saved.status,
                 idempotent_noop=False,
             )
-        except Exception as exc:
+        except Exception:
             failed = self._transition(
                 sending,
                 NotificationStatus.FAILED,
-                failure_reason=FailureReason.create(str(exc), code="dispatch_error"),
+                failure_reason=FailureReason.create(
+                    "Notification dispatch failed",
+                    code="dispatch_error",
+                ),
                 failed_at=datetime.now(UTC),
             )
             saved = self._notification_repository.save(failed)
@@ -134,7 +143,18 @@ class DispatchNotificationUseCase:
             idempotent_noop=False,
         )
 
-    def _settings_for_scope(self, organization_id: UUID | None) -> OrganizationNotificationSettings:
+    def _render_content(self, notification: Notification) -> RenderedNotificationContent:
+        if self._content_renderer is None:
+            return RenderedNotificationContent(
+                subject=notification.subject,
+                body=notification.body,
+            )
+        return self._content_renderer.render(notification)
+
+    def _settings_for_scope(
+        self,
+        organization_id: UUID | None,
+    ) -> OrganizationNotificationSettings:
         if organization_id is None:
             return OrganizationNotificationSettings(email_enabled=True, email_from=None)
         return self._settings_reader.get_for_organization(organization_id)
@@ -166,10 +186,14 @@ class DispatchNotificationUseCase:
             status=next_status,
             idempotency_key=notification.idempotency_key,
             job_id=notification.job_id,
-            failure_reason=failure_reason if failure_reason is not None else notification.failure_reason,
+            failure_reason=(
+                failure_reason if failure_reason is not None else notification.failure_reason
+            ),
             created_at=notification.created_at,
             queued_at=queued_at if queued_at is not None else notification.queued_at,
             sent_at=sent_at if sent_at is not None else notification.sent_at,
             failed_at=failed_at if failed_at is not None else notification.failed_at,
-            suppressed_at=suppressed_at if suppressed_at is not None else notification.suppressed_at,
+            suppressed_at=(
+                suppressed_at if suppressed_at is not None else notification.suppressed_at
+            ),
         )
