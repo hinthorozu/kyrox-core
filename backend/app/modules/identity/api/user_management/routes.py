@@ -20,6 +20,10 @@ from app.modules.identity.api.user_management.schemas import (
     ManualUserUpdateRequest,
     UserManagementContextResponse,
 )
+from app.modules.identity.application.authentication.password_policy import (
+    DEFAULT_PASSWORD_POLICY,
+    PasswordPolicyViolation,
+)
 from app.modules.identity.domain.authentication.value_objects.security.access_token import AccessTokenClaims
 from app.modules.identity.infrastructure.authentication.security import Argon2idPasswordHasher
 from app.modules.identity.infrastructure.authorization.persistence.models import (
@@ -36,6 +40,17 @@ router = APIRouter(tags=["user-management"])
 
 def _now() -> datetime:
     return datetime.now(tz=UTC)
+
+
+def _hash_password(password: str) -> str:
+    try:
+        DEFAULT_PASSWORD_POLICY.validate(password)
+    except PasswordPolicyViolation as exc:
+        raise AppException(
+            str(exc),
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        ) from exc
+    return Argon2idPasswordHasher().hash(password).value
 
 
 def _actor_is_super_admin(db: Session, user_id: UUID) -> bool:
@@ -343,6 +358,7 @@ def get_user(
         400: {"model": ErrorResponse},
         403: {"model": ErrorResponse},
         409: {"model": ErrorResponse},
+        422: {"model": ErrorResponse},
     },
 )
 def create_user(
@@ -370,7 +386,7 @@ def create_user(
     now = _now()
     user = UserModel(
         email=email,
-        password_hash=Argon2idPasswordHasher().hash(payload.password).value,
+        password_hash=_hash_password(payload.password),
         status=payload.status.value,
         is_super_admin=payload.is_super_admin if actor_is_super else False,
         organization_id=None if payload.is_super_admin else organization_id,
@@ -401,6 +417,7 @@ def create_user(
         403: {"model": ErrorResponse},
         404: {"model": ErrorResponse},
         409: {"model": ErrorResponse},
+        422: {"model": ErrorResponse},
     },
 )
 def update_user(
@@ -448,7 +465,7 @@ def update_user(
             )
         user.email = email
     if payload.password is not None:
-        user.password_hash = Argon2idPasswordHasher().hash(payload.password).value
+        user.password_hash = _hash_password(payload.password)
     if payload.status is not None:
         user.status = payload.status.value
     if payload.is_super_admin is not None:
