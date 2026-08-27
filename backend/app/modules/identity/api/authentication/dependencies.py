@@ -263,7 +263,7 @@ def get_public_signup_use_case(
     id_generator: IdGenerator = Depends(get_id_generator),
 ) -> PublicSignupUseCase:
     return PublicSignupUseCase(
-        organization_repository=SqlAlchemyOrganizationRepository(db),
+        organization_repository=SqlAlchemyOrganizationRepository(db, clock),
         user_repository=user_repository,
         role_repository=SqlAlchemyRoleRepository(db),
         user_role_repository=SqlAlchemyUserRoleRepository(db),
