@@ -18,6 +18,13 @@ class IdentityActionTokenRepository(Protocol):
 
     def get_by_token_hash(self, token_hash: TokenHash) -> IdentityActionToken | None: ...
 
+    def consume_if_available(
+        self,
+        token_hash: TokenHash,
+        purpose: IdentityActionTokenPurpose,
+        consumed_at: datetime,
+    ) -> IdentityActionToken | None: ...
+
     def invalidate_outstanding_for_user_purpose(
         self,
         user_id: UserId,
