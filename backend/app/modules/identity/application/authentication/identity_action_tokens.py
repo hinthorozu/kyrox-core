@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 
 from app.modules.identity.application.authentication.id_generator import IdGenerator
 from app.modules.identity.domain.authentication.entities.identity_action_token import (
@@ -121,7 +121,17 @@ class MaterializeIdentityActionToken:
             raise IdentityActionTokenConsumedError(
                 "Identity action token was already consumed"
             )
-        if self._clock.now() >= token.expires_at:
+
+        now = self._clock.now()
+        expires_at = token.expires_at
+        # SQLite loses timezone information for DateTime columns in tests while
+        # production PostgreSQL preserves it. Persisted identity timestamps are
+        # UTC, so normalize the SQLite round-trip before comparing.
+        if expires_at.tzinfo is None:
+            expires_at = expires_at.replace(tzinfo=UTC)
+        if now.tzinfo is None:
+            now = now.replace(tzinfo=UTC)
+        if now >= expires_at:
             raise IdentityActionTokenExpiredError(
                 "Identity action token has expired"
             )
