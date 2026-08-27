@@ -17,6 +17,7 @@ from app.modules.identity.api.authorization.context import AuthorizationContext
 from app.modules.identity.api.authorization.dependencies import get_authorization_service
 from app.modules.identity.api.authorization.guards import require_permission
 from app.modules.identity.application.authorization import AuthorizationService
+from app.modules.identity.domain.authentication.entities.session import Session as AuthSession
 from app.modules.identity.domain.authentication.value_objects.identity.session_id import SessionId
 from app.modules.identity.domain.authentication.value_objects.identity.user_id import UserId
 from app.modules.identity.domain.authentication.value_objects.security.access_token import (
@@ -24,6 +25,9 @@ from app.modules.identity.domain.authentication.value_objects.security.access_to
 )
 from app.modules.identity.domain.authentication.value_objects.security.email import Email
 from app.modules.identity.domain.entities import Organization, User
+from app.modules.identity.infrastructure.authentication.repositories.sqlalchemy_session_repository import (
+    SqlAlchemySessionRepository,
+)
 from app.modules.identity.infrastructure.authentication.security.jwt_token_service import (
     JwtTokenService,
 )
@@ -47,24 +51,34 @@ def db_session() -> Generator[Session, None, None]:
         engine.dispose()
 
 
-def _seed(db_session: Session) -> tuple[User, Organization, str]:
+def _seed(db_session: Session) -> tuple[User, Organization, str, SessionId]:
     seed = seed_user_role_with_permission(db_session)
     token_service = JwtTokenService(
         secret_key=settings.JWT_SECRET_KEY,
         algorithm=settings.JWT_ALGORITHM,
     )
     now = datetime.now(UTC)
+    session_id = SessionId(uuid.uuid4())
+    SqlAlchemySessionRepository(db_session).add(
+        AuthSession(
+            id=session_id,
+            user_id=UserId(seed.user.id),
+            created_at=now,
+            updated_at=now,
+        )
+    )
+    db_session.commit()
     access_token = token_service.create_access_token(
         AccessTokenClaims(
             sub=UserId(seed.user.id),
             email=Email(value=seed.user.email),
-            sid=SessionId(uuid.uuid4()),
+            sid=session_id,
             exp=now + timedelta(minutes=15),
             iat=now,
             jti=uuid.uuid4(),
         )
     )
-    return seed.user, seed.org, access_token.value
+    return seed.user, seed.org, access_token.value, session_id
 
 
 @pytest.fixture
@@ -111,7 +125,7 @@ def guard_client(db_session: Session) -> Generator[TestClient, None, None]:
 
 
 def test_guard_rejects_missing_bearer_token(guard_client: TestClient, db_session: Session) -> None:
-    _user, org, _token = _seed(db_session)
+    _user, org, _token, _session_id = _seed(db_session)
 
     response = guard_client.get(
         "/protected",
@@ -122,7 +136,7 @@ def test_guard_rejects_missing_bearer_token(guard_client: TestClient, db_session
 
 
 def test_guard_rejects_invalid_bearer_token(guard_client: TestClient, db_session: Session) -> None:
-    _user, org, _token = _seed(db_session)
+    _user, org, _token, _session_id = _seed(db_session)
 
     response = guard_client.get(
         "/protected",
@@ -139,7 +153,7 @@ def test_guard_rejects_missing_organization_header(
     guard_client: TestClient,
     db_session: Session,
 ) -> None:
-    _user, _org, token = _seed(db_session)
+    _user, _org, token, _session_id = _seed(db_session)
 
     response = guard_client.get(
         "/protected",
@@ -153,7 +167,7 @@ def test_guard_rejects_missing_permission(
     guard_client: TestClient,
     db_session: Session,
 ) -> None:
-    _user, org, token = _seed(db_session)
+    _user, org, token, _session_id = _seed(db_session)
 
     response = guard_client.get(
         "/denied",
@@ -170,7 +184,7 @@ def test_guard_allows_authorized_request(
     guard_client: TestClient,
     db_session: Session,
 ) -> None:
-    user, org, token = _seed(db_session)
+    user, org, token, _session_id = _seed(db_session)
 
     response = guard_client.get(
         "/protected",
@@ -183,3 +197,46 @@ def test_guard_allows_authorized_request(
     assert response.status_code == 200
     assert response.json()["user_id"] == str(user.id)
     assert response.json()["organization_id"] == str(org.id)
+
+
+def test_guard_rejects_access_token_after_session_revocation(
+    guard_client: TestClient,
+    db_session: Session,
+) -> None:
+    _user, org, token, session_id = _seed(db_session)
+    session_repo = SqlAlchemySessionRepository(db_session)
+    auth_session = session_repo.get_by_id(session_id)
+    assert auth_session is not None
+    auth_session.revoke(datetime.now(UTC))
+    session_repo.update(auth_session)
+    db_session.commit()
+
+    response = guard_client.get(
+        "/protected",
+        headers={
+            "Authorization": f"Bearer {token}",
+            "X-Organization-Id": str(org.id),
+        },
+    )
+
+    assert response.status_code == 401
+
+
+def test_guard_rejects_access_token_when_session_no_longer_exists(
+    guard_client: TestClient,
+    db_session: Session,
+) -> None:
+    _user, org, token, session_id = _seed(db_session)
+    session_repo = SqlAlchemySessionRepository(db_session)
+    session_repo.remove(session_id)
+    db_session.commit()
+
+    response = guard_client.get(
+        "/protected",
+        headers={
+            "Authorization": f"Bearer {token}",
+            "X-Organization-Id": str(org.id),
+        },
+    )
+
+    assert response.status_code == 401
