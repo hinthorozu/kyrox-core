@@ -5,7 +5,7 @@ from uuid import UUID
 
 @dataclass(frozen=True, slots=True)
 class SendNotificationCommand:
-    organization_id: UUID
+    organization_id: UUID | None
     channel: str
     recipient: str
     subject: str
