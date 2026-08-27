@@ -24,3 +24,11 @@ class ExpiredRefreshTokenError(InvalidRefreshTokenError):
 
 class RevokedRefreshTokenError(InvalidRefreshTokenError):
     """Refresh token has been revoked."""
+
+
+class PublicSignupConflictError(AuthenticationError):
+    """Public signup conflicts with an existing account or organization."""
+
+
+class PublicSignupProvisioningError(AuthenticationError):
+    """Public signup could not be provisioned atomically."""

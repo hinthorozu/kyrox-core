@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from datetime import datetime
+from uuid import UUID
 
 from app.modules.identity.domain.authentication.enums.user_status import UserStatus
 from app.modules.identity.domain.authentication.exceptions import (
@@ -22,6 +23,8 @@ class User:
     created_at: datetime
     updated_at: datetime
     deleted_at: datetime | None = None
+    organization_id: UUID | None = None
+    is_super_admin: bool = False
 
     @property
     def is_deleted(self) -> bool:
