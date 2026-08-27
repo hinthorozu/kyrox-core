@@ -376,6 +376,8 @@ def test_public_signup_api_persists_no_raw_activation_token(
                     "password": "not-yet-set",
                 },
             )
-            assert login_response.status_code == 403
+            # Existing login contract rejects a user without a password hash as
+            # invalid credentials; the pre-activation account must not log in.
+            assert login_response.status_code == 401
     finally:
         app.dependency_overrides.clear()
