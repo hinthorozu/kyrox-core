@@ -15,12 +15,12 @@ depends_on = None
 
 
 def upgrade() -> None:
-    op.alter_column(
-        "platform_jobs",
-        "organization_id",
-        existing_type=sa.Uuid(),
-        nullable=True,
-    )
+    with op.batch_alter_table("platform_jobs") as batch_op:
+        batch_op.alter_column(
+            "organization_id",
+            existing_type=sa.Uuid(),
+            nullable=True,
+        )
     op.create_index(
         "uq_platform_jobs_platform_type_idempotency",
         "platform_jobs",
@@ -34,12 +34,12 @@ def upgrade() -> None:
         ),
     )
 
-    op.alter_column(
-        "platform_notifications",
-        "organization_id",
-        existing_type=sa.Uuid(),
-        nullable=True,
-    )
+    with op.batch_alter_table("platform_notifications") as batch_op:
+        batch_op.alter_column(
+            "organization_id",
+            existing_type=sa.Uuid(),
+            nullable=True,
+        )
     op.create_index(
         "uq_platform_notifications_platform_idempotency",
         "platform_notifications",
@@ -60,21 +60,21 @@ def downgrade() -> None:
         table_name="platform_notifications",
     )
     op.execute(sa.text("DELETE FROM platform_notifications WHERE organization_id IS NULL"))
-    op.alter_column(
-        "platform_notifications",
-        "organization_id",
-        existing_type=sa.Uuid(),
-        nullable=False,
-    )
+    with op.batch_alter_table("platform_notifications") as batch_op:
+        batch_op.alter_column(
+            "organization_id",
+            existing_type=sa.Uuid(),
+            nullable=False,
+        )
 
     op.drop_index(
         "uq_platform_jobs_platform_type_idempotency",
         table_name="platform_jobs",
     )
     op.execute(sa.text("DELETE FROM platform_jobs WHERE organization_id IS NULL"))
-    op.alter_column(
-        "platform_jobs",
-        "organization_id",
-        existing_type=sa.Uuid(),
-        nullable=False,
-    )
+    with op.batch_alter_table("platform_jobs") as batch_op:
+        batch_op.alter_column(
+            "organization_id",
+            existing_type=sa.Uuid(),
+            nullable=False,
+        )
