@@ -15,7 +15,7 @@ class JobResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: UUID
-    organization_id: UUID
+    organization_id: UUID | None
     job_type: str
     status: str
     payload: dict[str, Any]
