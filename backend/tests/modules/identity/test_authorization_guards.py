@@ -31,6 +31,7 @@ from app.modules.identity.domain.authentication.value_objects.security.password_
 )
 from app.modules.identity.domain.entities import Organization, User
 from app.modules.identity.infrastructure.authentication.clock import UtcClock
+from app.modules.identity.infrastructure.authentication.persistence.models.session import SessionModel
 from app.modules.identity.infrastructure.authentication.repositories.sqlalchemy_session_repository import (
     SqlAlchemySessionRepository,
 )
@@ -267,12 +268,9 @@ def test_guard_rejects_access_token_when_session_belongs_to_different_user(
             updated_at=now,
         )
     )
-    session_repo = SqlAlchemySessionRepository(db_session)
-    auth_session = session_repo.get_by_id(session_id)
-    assert auth_session is not None
-    auth_session.user_id = other_user.id
-    auth_session.updated_at = now
-    session_repo.update(auth_session)
+    session_model = db_session.get(SessionModel, session_id.value)
+    assert session_model is not None
+    session_model.user_id = other_user.id.value
     db_session.commit()
 
     response = guard_client.get(
