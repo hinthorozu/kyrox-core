@@ -30,6 +30,17 @@ class PlatformNotificationModel(Base):
             postgresql_where=sa.text("idempotency_key IS NOT NULL"),
             sqlite_where=sa.text("idempotency_key IS NOT NULL"),
         ),
+        Index(
+            "uq_platform_notifications_platform_idempotency",
+            "idempotency_key",
+            unique=True,
+            postgresql_where=sa.text(
+                "organization_id IS NULL AND idempotency_key IS NOT NULL"
+            ),
+            sqlite_where=sa.text(
+                "organization_id IS NULL AND idempotency_key IS NOT NULL"
+            ),
+        ),
     )
 
     id: Mapped[UUID] = mapped_column(
@@ -37,7 +48,7 @@ class PlatformNotificationModel(Base):
         primary_key=True,
         default=generate_uuid,
     )
-    organization_id: Mapped[UUID] = mapped_column(UUIDPrimaryKey, nullable=False)
+    organization_id: Mapped[UUID | None] = mapped_column(UUIDPrimaryKey, nullable=True)
     channel: Mapped[str] = mapped_column(String(32), nullable=False)
     recipient: Mapped[str] = mapped_column(String(320), nullable=False)
     subject: Mapped[str] = mapped_column(String(998), nullable=False)
