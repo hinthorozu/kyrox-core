@@ -5,7 +5,7 @@ import sqlalchemy as sa
 from alembic import command
 from alembic.config import Config
 from alembic.runtime.migration import MigrationContext
-from sqlalchemy import inspect
+from sqlalchemy import inspect, text
 
 ROOT = Path(__file__).resolve().parents[2]
 ALEMBIC_INI = ROOT / "alembic.ini"
@@ -27,6 +27,21 @@ def alembic_config(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Config:
     return config
 
 
+def _prepare_database_at_previous_revision(config: Config) -> None:
+    engine = sa.create_engine(config.get_main_option("sqlalchemy.url"))
+    with engine.begin() as connection:
+        connection.execute(
+            text(
+                """
+                CREATE TABLE identity_users (
+                    id CHAR(32) NOT NULL PRIMARY KEY
+                )
+                """
+            )
+        )
+    command.stamp(config, PREVIOUS_REVISION)
+
+
 def _current_revision(config: Config) -> str | None:
     engine = sa.create_engine(config.get_main_option("sqlalchemy.url"))
     with engine.connect() as connection:
@@ -37,8 +52,10 @@ def _current_revision(config: Config) -> str | None:
 def test_migration_0063_creates_hash_only_action_token_schema(
     alembic_config: Config,
 ) -> None:
-    command.upgrade(alembic_config, PREVIOUS_REVISION)
+    _prepare_database_at_previous_revision(alembic_config)
     command.upgrade(alembic_config, REVISION)
+
+    assert _current_revision(alembic_config) == REVISION
 
     engine = sa.create_engine(alembic_config.get_main_option("sqlalchemy.url"))
     inspector = inspect(engine)
@@ -70,6 +87,7 @@ def test_migration_0063_creates_hash_only_action_token_schema(
 def test_migration_0063_downgrade_removes_action_token_table(
     alembic_config: Config,
 ) -> None:
+    _prepare_database_at_previous_revision(alembic_config)
     command.upgrade(alembic_config, REVISION)
     command.downgrade(alembic_config, PREVIOUS_REVISION)
 
