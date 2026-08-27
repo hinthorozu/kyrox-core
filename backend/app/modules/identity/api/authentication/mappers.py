@@ -3,6 +3,7 @@ from fastapi import Request
 from app.modules.identity.api.authentication.schemas import (
     LoginRequest,
     LogoutRequest,
+    PublicSignupRequest,
     RefreshRequest,
     TokenResponse,
 )
@@ -12,6 +13,7 @@ from app.modules.identity.application.authentication.commands import (
     LogoutCommand,
     RefreshSessionCommand,
 )
+from app.modules.identity.application.authentication.public_signup import PublicSignupCommand
 from app.modules.identity.application.authentication.results import AuthTokenPairResult
 from app.modules.identity.domain.authentication.value_objects.security.refresh_token import (
     RefreshToken as RefreshTokenValue,
@@ -39,6 +41,14 @@ def refresh_request_to_command(payload: RefreshRequest) -> RefreshSessionCommand
 def logout_request_to_command(payload: LogoutRequest) -> LogoutCommand:
     return LogoutCommand(
         refresh_token=RefreshTokenValue.create(payload.refresh_token),
+    )
+
+
+def public_signup_request_to_command(payload: PublicSignupRequest) -> PublicSignupCommand:
+    return PublicSignupCommand(
+        organization_name=payload.organization_name,
+        organization_slug=payload.organization_slug,
+        email=str(payload.email),
     )
 
 

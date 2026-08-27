@@ -16,6 +16,7 @@ from app.modules.identity.domain.authentication.enums.user_status import UserSta
 from app.modules.identity.domain.authentication.exceptions.authentication import (
     PublicSignupConflictError,
     PublicSignupProvisioningError,
+    PublicSignupValidationError,
 )
 from app.modules.identity.domain.authentication.ports.clock import Clock
 from app.modules.identity.domain.authentication.ports.user_repository import UserRepository
@@ -40,6 +41,7 @@ from app.modules.identity.domain.authorization.value_objects.identity.user_role_
 from app.modules.identity.domain.authorization.value_objects.rbac.role_slug import RoleSlug
 from app.modules.identity.domain.organization.entities.organization import Organization
 from app.modules.identity.domain.organization.enums.organization_status import OrganizationStatus
+from app.modules.identity.domain.organization.exceptions import OrganizationError
 from app.modules.identity.domain.organization.ports.organization_repository import (
     OrganizationRepository,
 )
@@ -101,16 +103,24 @@ class PublicSignupUseCase:
         self._naming_policy = naming_policy or OrganizationNamingPolicy()
 
     def execute(self, command: PublicSignupCommand) -> PublicSignupResult:
-        email = Email.create(command.email)
+        try:
+            email = Email.create(command.email)
+        except ValueError as exc:
+            raise PublicSignupValidationError("Invalid signup details") from exc
+
         if self._user_repository.get_by_email(email) is not None:
             raise PublicSignupConflictError(
                 "An account with the supplied details already exists"
             )
 
         organization_id = OrganizationId(self._id_generator.generate_uuid())
-        name = self._naming_policy.normalize_name(command.organization_name)
-        raw_slug = command.organization_slug or f"org-{organization_id.value.hex[:12]}"
-        slug = self._naming_policy.normalize_slug(raw_slug)
+        try:
+            name = self._naming_policy.normalize_name(command.organization_name)
+            raw_slug = command.organization_slug or f"org-{organization_id.value.hex[:12]}"
+            slug = self._naming_policy.normalize_slug(raw_slug)
+        except (OrganizationError, ValueError) as exc:
+            raise PublicSignupValidationError("Invalid signup details") from exc
+
         if self._organization_repository.exists_by_slug(slug):
             raise PublicSignupConflictError(
                 "An account with the supplied details already exists"
@@ -152,9 +162,7 @@ class PublicSignupUseCase:
             or not organization_admin.is_assignable
             or not organization_admin.is_protected
         ):
-            raise PublicSignupProvisioningError(
-                "Signup is temporarily unavailable"
-            )
+            raise PublicSignupProvisioningError("Signup is temporarily unavailable")
 
         self._user_role_repository.add(
             UserRole(

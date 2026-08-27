@@ -1,14 +1,16 @@
-from fastapi import APIRouter, Depends, Request, Response, status
+from fastapi import APIRouter, BackgroundTasks, Depends, Request, Response, status
 
 from app.modules.identity.api.authentication.dependencies import (
     get_login_use_case,
     get_logout_use_case,
+    get_public_signup_use_case,
     get_refresh_session_use_case,
 )
 from app.modules.identity.api.authentication.error_mapping import map_authentication_error
 from app.modules.identity.api.authentication.mappers import (
     login_request_to_command,
     logout_request_to_command,
+    public_signup_request_to_command,
     refresh_request_to_command,
     result_to_token_response,
 )
@@ -16,15 +18,49 @@ from app.modules.identity.api.authentication.schemas import (
     ErrorResponse,
     LoginRequest,
     LogoutRequest,
+    PublicSignupRequest,
+    PublicSignupResponse,
     RefreshRequest,
     TokenResponse,
 )
 from app.modules.identity.application.authentication.login import LoginUseCase
 from app.modules.identity.application.authentication.logout import LogoutUseCase
+from app.modules.identity.application.authentication.public_signup import PublicSignupUseCase
 from app.modules.identity.application.authentication.refresh_session import RefreshSessionUseCase
 from app.modules.identity.domain.authentication.exceptions import AuthenticationError
+from app.modules.notifications.api.dependencies import (
+    NotificationWorkerScheduler,
+    get_notification_worker_scheduler,
+)
 
 router = APIRouter(prefix="/auth", tags=["auth"])
+
+
+@router.post(
+    "/signup",
+    response_model=PublicSignupResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+    responses={
+        409: {"model": ErrorResponse},
+        422: {"model": ErrorResponse},
+        503: {"model": ErrorResponse},
+    },
+)
+def public_signup(
+    payload: PublicSignupRequest,
+    background_tasks: BackgroundTasks,
+    use_case: PublicSignupUseCase = Depends(get_public_signup_use_case),
+    worker_scheduler: NotificationWorkerScheduler = Depends(get_notification_worker_scheduler),
+) -> PublicSignupResponse:
+    try:
+        use_case.execute(public_signup_request_to_command(payload))
+    except AuthenticationError as exc:
+        raise map_authentication_error(exc) from exc
+
+    worker_scheduler.schedule(background_tasks)
+    return PublicSignupResponse(
+        message="Signup accepted. Check your email to activate your account."
+    )
 
 
 @router.post(

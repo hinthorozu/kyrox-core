@@ -26,6 +26,10 @@ class RevokedRefreshTokenError(InvalidRefreshTokenError):
     """Refresh token has been revoked."""
 
 
+class PublicSignupValidationError(AuthenticationError):
+    """Public signup request failed Core domain validation."""
+
+
 class PublicSignupConflictError(AuthenticationError):
     """Public signup conflicts with an existing account or organization."""
 

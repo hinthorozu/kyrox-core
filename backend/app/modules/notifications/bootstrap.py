@@ -4,8 +4,21 @@ from sqlalchemy.orm import Session as DbSession
 
 from app.core.config import settings
 from app.db.session import SessionLocal
+from app.modules.identity.application.authentication.identity_action_tokens import (
+    MaterializeIdentityActionToken,
+)
+from app.modules.identity.infrastructure.authentication.clock import UtcClock
+from app.modules.identity.infrastructure.authentication.repositories.sqlalchemy_identity_action_token_repository import (
+    SqlAlchemyIdentityActionTokenRepository,
+)
+from app.modules.identity.infrastructure.authentication.security.identity_action_token_service import (
+    IdentityActionTokenService,
+)
 from app.modules.jobs.application.worker.registry import InMemoryJobHandlerRegistry
 from app.modules.jobs.domain.value_objects.job_type import JobType
+from app.modules.notifications.application.identity_delivery_renderer import (
+    IdentityNotificationContentRenderer,
+)
 from app.modules.notifications.domain.value_objects.notification_channel import NotificationChannel
 from app.modules.notifications.infrastructure.channels.email_log_stub_adapter import EmailLogStubAdapter
 from app.modules.notifications.infrastructure.channels.registry import InMemoryNotificationChannelRegistry
@@ -42,6 +55,24 @@ def build_notification_channel_registry() -> InMemoryNotificationChannelRegistry
     return registry
 
 
+def build_identity_notification_content_renderer(
+    session: DbSession,
+) -> IdentityNotificationContentRenderer:
+    token_service = IdentityActionTokenService(
+        settings.CORE_IDENTITY_ACTION_TOKEN_SECRET_KEY
+    )
+    materializer = MaterializeIdentityActionToken(
+        repository=SqlAlchemyIdentityActionTokenRepository(session),
+        token_service=token_service,
+        clock=UtcClock(),
+    )
+    return IdentityNotificationContentRenderer(
+        materialize_identity_action_token=materializer,
+        activation_url_template=settings.CORE_IDENTITY_ACTIVATION_URL_TEMPLATE,
+        password_reset_url_template=settings.CORE_IDENTITY_PASSWORD_RESET_URL_TEMPLATE,
+    )
+
+
 def build_notification_dispatch_job_handler(
     session_factory: Callable[[], DbSession],
     channel_registry: InMemoryNotificationChannelRegistry,
@@ -49,6 +80,7 @@ def build_notification_dispatch_job_handler(
     return NotificationDispatchJobHandler(
         session_factory=session_factory,
         channel_registry=channel_registry,
+        content_renderer_factory=build_identity_notification_content_renderer,
     )
 
 

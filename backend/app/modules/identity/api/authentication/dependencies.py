@@ -1,17 +1,38 @@
+from datetime import timedelta
 from functools import lru_cache
+from uuid import UUID
 
 from fastapi import Depends
 from sqlalchemy.orm import Session as DbSession
 
 from app.core.config import settings
 from app.db.session import get_db
-from app.modules.identity.application.authentication.id_generator import IdGenerator, Uuid4IdGenerator
+from app.modules.identity.application.authentication.id_generator import (
+    IdGenerator,
+    Uuid4IdGenerator,
+)
+from app.modules.identity.application.authentication.identity_action_tokens import (
+    IssueIdentityActionToken,
+)
 from app.modules.identity.application.authentication.login import LoginUseCase
 from app.modules.identity.application.authentication.logout import LogoutUseCase
 from app.modules.identity.application.authentication.policy import TokenPolicy
+from app.modules.identity.application.authentication.public_signup import (
+    ActivationNotificationPort,
+    PublicSignupUseCase,
+)
 from app.modules.identity.application.authentication.refresh_session import RefreshSessionUseCase
 from app.modules.identity.application.authentication.token_pair_issuer import TokenPairIssuer
+from app.modules.identity.domain.authentication.exceptions.authentication import (
+    PublicSignupProvisioningError,
+)
 from app.modules.identity.domain.authentication.ports.clock import Clock
+from app.modules.identity.domain.authentication.ports.identity_action_token_repository import (
+    IdentityActionTokenRepository,
+)
+from app.modules.identity.domain.authentication.ports.identity_action_token_service import (
+    IdentityActionTokenService,
+)
 from app.modules.identity.domain.authentication.ports.password_hasher import PasswordHasher
 from app.modules.identity.domain.authentication.ports.refresh_token_repository import (
     RefreshTokenRepository,
@@ -20,8 +41,13 @@ from app.modules.identity.domain.authentication.ports.refresh_token_service impo
 from app.modules.identity.domain.authentication.ports.session_repository import SessionRepository
 from app.modules.identity.domain.authentication.ports.token_service import TokenService
 from app.modules.identity.domain.authentication.ports.user_repository import UserRepository
+from app.modules.identity.domain.authentication.value_objects.identity.identity_action_token_id import (
+    IdentityActionTokenId,
+)
+from app.modules.identity.domain.authentication.value_objects.identity.user_id import UserId
 from app.modules.identity.infrastructure.authentication.clock import UtcClock
 from app.modules.identity.infrastructure.authentication.repositories import (
+    SqlAlchemyIdentityActionTokenRepository,
     SqlAlchemyRefreshTokenRepository,
     SqlAlchemySessionRepository,
     SqlAlchemyUserRepository,
@@ -31,6 +57,54 @@ from app.modules.identity.infrastructure.authentication.security import (
     JwtTokenService,
     RefreshTokenService as RefreshTokenServiceImpl,
 )
+from app.modules.identity.infrastructure.authentication.security.identity_action_token_service import (
+    IdentityActionTokenService as IdentityActionTokenServiceImpl,
+)
+from app.modules.identity.infrastructure.authorization.repositories.sqlalchemy_role_repository import (
+    SqlAlchemyRoleRepository,
+)
+from app.modules.identity.infrastructure.authorization.repositories.sqlalchemy_user_role_repository import (
+    SqlAlchemyUserRoleRepository,
+)
+from app.modules.identity.infrastructure.organization.repositories.sqlalchemy_organization_repository import (
+    SqlAlchemyOrganizationRepository,
+)
+from app.modules.notifications.api.dependencies import get_send_notification_use_case
+from app.modules.notifications.application.commands import SendNotificationCommand
+from app.modules.notifications.application.identity_templates import IDENTITY_ACTIVATION_TEMPLATE_KEY
+from app.modules.notifications.application.send_notification import SendNotificationUseCase
+from app.modules.notifications.domain.value_objects.notification_status import NotificationStatus
+
+
+class _CoreActivationNotificationAdapter(ActivationNotificationPort):
+    def __init__(self, send_notification_use_case: SendNotificationUseCase) -> None:
+        self._send_notification_use_case = send_notification_use_case
+
+    def enqueue_activation(
+        self,
+        *,
+        recipient: str,
+        user_id: UserId,
+        token_id: IdentityActionTokenId,
+    ) -> UUID:
+        result = self._send_notification_use_case.execute(
+            SendNotificationCommand(
+                organization_id=None,
+                channel="email",
+                recipient=recipient,
+                subject="Activate your KYROX account",
+                body=(
+                    "Your KYROX account is awaiting activation. "
+                    "The secure activation link is generated only at delivery time."
+                ),
+                template_key=IDENTITY_ACTIVATION_TEMPLATE_KEY,
+                variables={"identity_action_token_id": str(token_id.value)},
+                idempotency_key=f"identity:activation:{user_id.value}",
+            )
+        )
+        if result.status is not NotificationStatus.QUEUED:
+            raise PublicSignupProvisioningError("Signup is temporarily unavailable")
+        return result.notification_id
 
 
 @lru_cache
@@ -56,6 +130,13 @@ def get_refresh_token_service() -> RefreshTokenService:
     return RefreshTokenServiceImpl()
 
 
+@lru_cache
+def get_identity_action_token_service() -> IdentityActionTokenService:
+    return IdentityActionTokenServiceImpl(
+        secret_key=settings.CORE_IDENTITY_ACTION_TOKEN_SECRET_KEY
+    )
+
+
 def get_id_generator() -> IdGenerator:
     return Uuid4IdGenerator()
 
@@ -74,6 +155,12 @@ def get_user_repository(
     return SqlAlchemyUserRepository(db, clock)
 
 
+def get_identity_action_token_repository(
+    db: DbSession = Depends(get_db),
+) -> IdentityActionTokenRepository:
+    return SqlAlchemyIdentityActionTokenRepository(db)
+
+
 def get_session_repository(db: DbSession = Depends(get_db)) -> SessionRepository:
     return SqlAlchemySessionRepository(db)
 
@@ -83,6 +170,20 @@ def get_refresh_token_repository(
     clock: Clock = Depends(get_clock),
 ) -> RefreshTokenRepository:
     return SqlAlchemyRefreshTokenRepository(db, clock)
+
+
+def get_issue_identity_action_token(
+    repository: IdentityActionTokenRepository = Depends(get_identity_action_token_repository),
+    token_service: IdentityActionTokenService = Depends(get_identity_action_token_service),
+    clock: Clock = Depends(get_clock),
+    id_generator: IdGenerator = Depends(get_id_generator),
+) -> IssueIdentityActionToken:
+    return IssueIdentityActionToken(
+        repository=repository,
+        token_service=token_service,
+        clock=clock,
+        id_generator=id_generator,
+    )
 
 
 def get_token_pair_issuer(
@@ -150,4 +251,25 @@ def get_logout_use_case(
         refresh_token_repository=refresh_token_repository,
         refresh_token_service=refresh_token_service,
         clock=clock,
+    )
+
+
+def get_public_signup_use_case(
+    db: DbSession = Depends(get_db),
+    user_repository: UserRepository = Depends(get_user_repository),
+    issue_identity_action_token: IssueIdentityActionToken = Depends(get_issue_identity_action_token),
+    send_notification_use_case: SendNotificationUseCase = Depends(get_send_notification_use_case),
+    clock: Clock = Depends(get_clock),
+    id_generator: IdGenerator = Depends(get_id_generator),
+) -> PublicSignupUseCase:
+    return PublicSignupUseCase(
+        organization_repository=SqlAlchemyOrganizationRepository(db),
+        user_repository=user_repository,
+        role_repository=SqlAlchemyRoleRepository(db),
+        user_role_repository=SqlAlchemyUserRoleRepository(db),
+        issue_identity_action_token=issue_identity_action_token,
+        activation_notification_port=_CoreActivationNotificationAdapter(send_notification_use_case),
+        clock=clock,
+        id_generator=id_generator,
+        activation_token_ttl=timedelta(hours=settings.CORE_IDENTITY_ACTION_TOKEN_TTL_HOURS),
     )
