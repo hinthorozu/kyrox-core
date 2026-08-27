@@ -8,7 +8,7 @@ from app.modules.identity.domain.authentication.enums.user_status import UserSta
 
 class ManualUserCreateRequest(BaseModel):
     email: str = Field(min_length=3, max_length=320)
-    password: str = Field(min_length=1)
+    password: str
     role_id: UUID | None = None
     status: UserStatus = UserStatus.ACTIVE
     is_super_admin: bool = False
@@ -22,7 +22,7 @@ class ManualUserCreateRequest(BaseModel):
 
 class ManualUserUpdateRequest(BaseModel):
     email: str | None = Field(default=None, min_length=3, max_length=320)
-    password: str | None = Field(default=None, min_length=1)
+    password: str | None = None
     role_id: UUID | None = None
     status: UserStatus | None = None
     is_super_admin: bool | None = None
