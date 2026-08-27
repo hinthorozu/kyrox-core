@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from datetime import timedelta
+from datetime import datetime, timedelta
 
 from app.modules.identity.application.authentication.id_generator import IdGenerator
 from app.modules.identity.domain.authentication.entities.identity_action_token import (
@@ -28,7 +28,7 @@ from app.modules.identity.domain.authentication.value_objects.identity.user_id i
 @dataclass(frozen=True, slots=True)
 class IssuedIdentityActionToken:
     raw_token: str
-    expires_at: object
+    expires_at: datetime
 
 
 class IssueIdentityActionToken:
