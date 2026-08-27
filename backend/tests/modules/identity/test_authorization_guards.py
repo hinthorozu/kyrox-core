@@ -18,15 +18,24 @@ from app.modules.identity.api.authorization.dependencies import get_authorizatio
 from app.modules.identity.api.authorization.guards import require_permission
 from app.modules.identity.application.authorization import AuthorizationService
 from app.modules.identity.domain.authentication.entities.session import Session as AuthSession
+from app.modules.identity.domain.authentication.entities.user import User as AuthUser
+from app.modules.identity.domain.authentication.enums.user_status import UserStatus as AuthUserStatus
 from app.modules.identity.domain.authentication.value_objects.identity.session_id import SessionId
 from app.modules.identity.domain.authentication.value_objects.identity.user_id import UserId
 from app.modules.identity.domain.authentication.value_objects.security.access_token import (
     AccessTokenClaims,
 )
 from app.modules.identity.domain.authentication.value_objects.security.email import Email
+from app.modules.identity.domain.authentication.value_objects.security.password_hash import (
+    PasswordHash,
+)
 from app.modules.identity.domain.entities import Organization, User
+from app.modules.identity.infrastructure.authentication.clock import UtcClock
 from app.modules.identity.infrastructure.authentication.repositories.sqlalchemy_session_repository import (
     SqlAlchemySessionRepository,
+)
+from app.modules.identity.infrastructure.authentication.repositories.sqlalchemy_user_repository import (
+    SqlAlchemyUserRepository,
 )
 from app.modules.identity.infrastructure.authentication.security.jwt_token_service import (
     JwtTokenService,
@@ -229,6 +238,41 @@ def test_guard_rejects_access_token_when_session_no_longer_exists(
     _user, org, token, session_id = _seed(db_session)
     session_repo = SqlAlchemySessionRepository(db_session)
     session_repo.remove(session_id)
+    db_session.commit()
+
+    response = guard_client.get(
+        "/protected",
+        headers={
+            "Authorization": f"Bearer {token}",
+            "X-Organization-Id": str(org.id),
+        },
+    )
+
+    assert response.status_code == 401
+
+
+def test_guard_rejects_access_token_when_session_belongs_to_different_user(
+    guard_client: TestClient,
+    db_session: Session,
+) -> None:
+    _user, org, token, session_id = _seed(db_session)
+    now = datetime.now(UTC)
+    other_user = SqlAlchemyUserRepository(db_session, UtcClock()).add(
+        AuthUser(
+            id=UserId(uuid.uuid4()),
+            email=Email.create("other-session-user@example.com"),
+            password_hash=PasswordHash("hash"),
+            status=AuthUserStatus.ACTIVE,
+            created_at=now,
+            updated_at=now,
+        )
+    )
+    session_repo = SqlAlchemySessionRepository(db_session)
+    auth_session = session_repo.get_by_id(session_id)
+    assert auth_session is not None
+    auth_session.user_id = other_user.id
+    auth_session.updated_at = now
+    session_repo.update(auth_session)
     db_session.commit()
 
     response = guard_client.get(
