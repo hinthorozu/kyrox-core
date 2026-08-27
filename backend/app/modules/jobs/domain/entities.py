@@ -14,7 +14,7 @@ JsonValue = dict[str, Any] | list[Any] | str | int | float | bool | None
 @dataclass(slots=True)
 class Job:
     id: UUID
-    organization_id: UUID
+    organization_id: UUID | None
     job_type: JobType
     payload: JsonPayload
     status: JobStatus
