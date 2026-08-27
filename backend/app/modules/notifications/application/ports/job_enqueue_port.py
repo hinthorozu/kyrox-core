@@ -6,6 +6,6 @@ class JobEnqueuePort(Protocol):
     def enqueue_notification_dispatch(
         self,
         *,
-        organization_id: UUID,
+        organization_id: UUID | None,
         notification_id: UUID,
     ) -> UUID: ...
