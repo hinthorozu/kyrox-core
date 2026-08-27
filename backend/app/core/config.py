@@ -23,6 +23,18 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_DAYS: int = 15
     REFRESH_TOKEN_EXPIRE_DAYS: int = 15
 
+    # Core-owned identity/platform email. These credentials are deliberately
+    # separate from product/tenant mail accounts such as FAIR CRM providers.
+    CORE_EMAIL_PROVIDER: str = "log"
+    CORE_EMAIL_FROM: str | None = None
+    CORE_SMTP_HOST: str | None = None
+    CORE_SMTP_PORT: int = 587
+    CORE_SMTP_USERNAME: str | None = None
+    CORE_SMTP_PASSWORD: str | None = None
+    CORE_SMTP_STARTTLS: bool = True
+    CORE_SMTP_SSL: bool = False
+    CORE_SMTP_TIMEOUT_SECONDS: float = 10.0
+
     model_config = SettingsConfigDict(
         env_file=_ENV_FILES,
         env_file_encoding="utf-8",
