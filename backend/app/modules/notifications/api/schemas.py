@@ -19,7 +19,7 @@ class NotificationResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: UUID
-    organization_id: UUID
+    organization_id: UUID | None
     channel: str
     recipient: str
     subject: str

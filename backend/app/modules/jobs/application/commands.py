@@ -5,7 +5,7 @@ from uuid import UUID
 
 @dataclass(frozen=True, slots=True)
 class EnqueueJobCommand:
-    organization_id: UUID
+    organization_id: UUID | None
     job_type: str
     payload: dict[str, Any]
     idempotency_key: str | None = None

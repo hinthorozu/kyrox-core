@@ -1,4 +1,5 @@
 from datetime import UTC, datetime
+from uuid import UUID
 
 from app.modules.notifications.application.commands import DispatchNotificationCommand
 from app.modules.notifications.application.policy import NotificationPolicy
@@ -14,6 +15,7 @@ from app.modules.notifications.domain.ports import (
     NotificationChannelRegistry,
     NotificationRepository,
     NotificationSettingsReader,
+    OrganizationNotificationSettings,
 )
 from app.modules.notifications.domain.value_objects.failure_reason import FailureReason
 from app.modules.notifications.domain.value_objects.notification_channel import NotificationChannel
@@ -45,7 +47,7 @@ class DispatchNotificationUseCase:
                 idempotent_noop=True,
             )
 
-        settings = self._settings_reader.get_for_organization(notification.organization_id)
+        settings = self._settings_for_scope(notification.organization_id)
         if notification.channel == NotificationChannel.EMAIL and not settings.email_enabled:
             suppressed = self._transition(
                 notification,
@@ -131,6 +133,11 @@ class DispatchNotificationUseCase:
             status=saved.status,
             idempotent_noop=False,
         )
+
+    def _settings_for_scope(self, organization_id: UUID | None) -> OrganizationNotificationSettings:
+        if organization_id is None:
+            return OrganizationNotificationSettings(email_enabled=True, email_from=None)
+        return self._settings_reader.get_for_organization(organization_id)
 
     @staticmethod
     def _transition(

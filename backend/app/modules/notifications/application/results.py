@@ -10,7 +10,7 @@ from app.modules.notifications.domain.value_objects.notification_status import N
 @dataclass(frozen=True, slots=True)
 class SendNotificationResult:
     notification_id: UUID
-    organization_id: UUID
+    organization_id: UUID | None
     channel: NotificationChannel
     recipient: str
     subject: str
@@ -30,7 +30,7 @@ class SendNotificationResult:
 @dataclass(frozen=True, slots=True)
 class GetNotificationResult:
     notification_id: UUID
-    organization_id: UUID
+    organization_id: UUID | None
     channel: NotificationChannel
     recipient: str
     subject: str

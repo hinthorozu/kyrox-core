@@ -7,7 +7,7 @@ from uuid import UUID
 @dataclass(frozen=True, slots=True)
 class JobResult:
     id: UUID
-    organization_id: UUID
+    organization_id: UUID | None
     job_type: str
     status: str
     payload: dict[str, Any]

@@ -12,7 +12,7 @@ from app.modules.notifications.domain.value_objects.recipient import Recipient
 @dataclass(slots=True)
 class Notification:
     id: UUID
-    organization_id: UUID
+    organization_id: UUID | None
     channel: NotificationChannel
     recipient: Recipient
     subject: str

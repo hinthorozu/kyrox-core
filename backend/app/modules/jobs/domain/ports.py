@@ -11,7 +11,7 @@ class JobRepository(Protocol):
 
     def find_by_idempotency(
         self,
-        organization_id: UUID,
+        organization_id: UUID | None,
         job_type: JobType,
         idempotency_key: str,
     ) -> Job | None: ...

@@ -24,7 +24,7 @@ class SqlAlchemyNotificationRepository:
 
     def find_by_idempotency(
         self,
-        organization_id: UUID,
+        organization_id: UUID | None,
         idempotency_key: str,
     ) -> Notification | None:
         stmt = (
