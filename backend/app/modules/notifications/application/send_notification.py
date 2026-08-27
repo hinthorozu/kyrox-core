@@ -7,7 +7,11 @@ from app.modules.notifications.application.ports.job_enqueue_port import JobEnqu
 from app.modules.notifications.application.results import SendNotificationResult
 from app.modules.notifications.domain.entities import Notification
 from app.modules.notifications.domain.exceptions import DuplicateIdempotencyConflictError
-from app.modules.notifications.domain.ports import NotificationRepository, NotificationSettingsReader
+from app.modules.notifications.domain.ports import (
+    NotificationRepository,
+    NotificationSettingsReader,
+    OrganizationNotificationSettings,
+)
 from app.modules.notifications.domain.value_objects.failure_reason import FailureReason
 from app.modules.notifications.domain.value_objects.notification_status import NotificationStatus
 
@@ -57,7 +61,7 @@ class SendNotificationUseCase:
                     )
                 return self._to_result(existing, idempotent_replay=True)
 
-        settings = self._settings_reader.get_for_organization(command.organization_id)
+        settings = self._settings_for_scope(command.organization_id)
         now = datetime.now(UTC)
         notification_id = uuid4()
 
@@ -128,6 +132,13 @@ class SendNotificationUseCase:
         )
         saved = self._notification_repository.save(queued)
         return self._to_result(saved, idempotent_replay=False)
+
+    def _settings_for_scope(self, organization_id: UUID | None) -> OrganizationNotificationSettings:
+        if organization_id is None:
+            # Platform identity/security mail is controlled by Core provider config,
+            # not organization/product mail preferences.
+            return OrganizationNotificationSettings(email_enabled=True, email_from=None)
+        return self._settings_reader.get_for_organization(organization_id)
 
     @staticmethod
     def _to_result(notification: Notification, *, idempotent_replay: bool) -> SendNotificationResult:
