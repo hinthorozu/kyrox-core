@@ -15,7 +15,7 @@ class JobsModuleEnqueueAdapter(JobEnqueuePort):
     def enqueue_notification_dispatch(
         self,
         *,
-        organization_id: UUID,
+        organization_id: UUID | None,
         notification_id: UUID,
     ) -> UUID:
         result = self._enqueue_job_use_case.execute(
