@@ -35,6 +35,18 @@ class PlatformJobModel(Base):
             postgresql_where=sa.text("idempotency_key IS NOT NULL"),
             sqlite_where=sa.text("idempotency_key IS NOT NULL"),
         ),
+        Index(
+            "uq_platform_jobs_platform_type_idempotency",
+            "job_type",
+            "idempotency_key",
+            unique=True,
+            postgresql_where=sa.text(
+                "organization_id IS NULL AND idempotency_key IS NOT NULL"
+            ),
+            sqlite_where=sa.text(
+                "organization_id IS NULL AND idempotency_key IS NOT NULL"
+            ),
+        ),
     )
 
     id: Mapped[UUID] = mapped_column(
@@ -42,7 +54,7 @@ class PlatformJobModel(Base):
         primary_key=True,
         default=generate_uuid,
     )
-    organization_id: Mapped[UUID] = mapped_column(UUIDPrimaryKey, nullable=False)
+    organization_id: Mapped[UUID | None] = mapped_column(UUIDPrimaryKey, nullable=True)
     job_type: Mapped[str] = mapped_column(String(255), nullable=False)
     payload: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
     status: Mapped[str] = mapped_column(String(32), nullable=False)
