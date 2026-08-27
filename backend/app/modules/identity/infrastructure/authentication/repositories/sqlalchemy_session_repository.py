@@ -1,7 +1,9 @@
+from sqlalchemy import select
 from sqlalchemy.orm import Session as DbSession
 
 from app.modules.identity.domain.authentication.entities.session import Session
 from app.modules.identity.domain.authentication.value_objects.identity.session_id import SessionId
+from app.modules.identity.domain.authentication.value_objects.identity.user_id import UserId
 from app.modules.identity.infrastructure.authentication.persistence.mappers.session_mapper import (
     SessionMapper,
 )
@@ -42,3 +44,14 @@ class SqlAlchemySessionRepository:
         if model is None:
             return None
         return SessionMapper.to_domain(model)
+
+    def get_active_by_user_id(self, user_id: UserId) -> list[Session]:
+        stmt = (
+            select(SessionModel)
+            .where(
+                SessionModel.user_id == user_id.value,
+                SessionModel.revoked_at.is_(None),
+            )
+            .order_by(SessionModel.created_at.asc())
+        )
+        return [SessionMapper.to_domain(model) for model in self._session.scalars(stmt).all()]
