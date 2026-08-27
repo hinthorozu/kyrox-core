@@ -2,6 +2,9 @@ import pytest
 
 from app.core.exceptions import AppException
 from app.modules.identity.api.user_management.routes import _hash_password
+from app.modules.identity.domain.authentication.value_objects.security.password_hash import (
+    PasswordHash,
+)
 from app.modules.identity.infrastructure.authentication.security import Argon2idPasswordHasher
 
 
@@ -10,7 +13,7 @@ def test_manual_user_password_hash_uses_shared_policy() -> None:
 
     password_hash = _hash_password(raw_password)
 
-    assert Argon2idPasswordHasher().verify(raw_password, password_hash) is True
+    assert Argon2idPasswordHasher().verify(raw_password, PasswordHash(password_hash)) is True
 
 
 def test_manual_user_password_hash_rejects_short_password_without_echoing_secret() -> None:
