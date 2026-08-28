@@ -2,10 +2,12 @@ from fastapi import APIRouter, BackgroundTasks, Depends, Request, Response, stat
 
 from app.modules.identity.api.authentication.dependencies import (
     get_complete_activation_use_case,
+    get_forgot_password_use_case,
     get_login_use_case,
     get_logout_use_case,
     get_public_signup_use_case,
     get_refresh_session_use_case,
+    get_reset_password_use_case,
 )
 from app.modules.identity.api.authentication.error_mapping import map_authentication_error
 from app.modules.identity.api.authentication.mappers import (
@@ -17,10 +19,6 @@ from app.modules.identity.api.authentication.mappers import (
     refresh_request_to_command,
     reset_password_request_to_command,
     result_to_token_response,
-)
-from app.modules.identity.api.authentication.password_recovery_dependencies import (
-    get_forgot_password_use_case,
-    get_reset_password_use_case,
 )
 from app.modules.identity.api.authentication.schemas import (
     CompleteActivationRequest,
