@@ -9,6 +9,8 @@ from app.modules.identity.domain.authentication.exceptions import (
 from app.modules.identity.domain.authentication.exceptions.authentication import (
     ActivationPasswordPolicyError,
     InvalidActivationTokenError,
+    InvalidPasswordResetTokenError,
+    PasswordResetPolicyError,
     PublicSignupConflictError,
     PublicSignupProvisioningError,
     PublicSignupValidationError,
@@ -36,6 +38,13 @@ def map_authentication_error(exc: AuthenticationError) -> AppException:
     if isinstance(exc, InvalidActivationTokenError):
         return AppException("Invalid or expired activation token", status_code=400)
     if isinstance(exc, ActivationPasswordPolicyError):
+        return AppException(
+            "Password does not satisfy the Core password policy",
+            status_code=422,
+        )
+    if isinstance(exc, InvalidPasswordResetTokenError):
+        return AppException("Invalid or expired password reset token", status_code=400)
+    if isinstance(exc, PasswordResetPolicyError):
         return AppException(
             "Password does not satisfy the Core password policy",
             status_code=422,
