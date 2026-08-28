@@ -7,11 +7,22 @@ from sqlalchemy.orm import Session as DbSession
 
 from app.core.config import settings
 from app.db.session import get_db
+from app.modules.audit.application.record_organization_audit_event import (
+    RecordOrganizationAuditEventCommand,
+    RecordOrganizationAuditEventUseCase,
+)
+from app.modules.audit.application.service import AuditService
+from app.modules.audit.infrastructure.repositories import SqlAlchemyAuditLogRepository
+from app.modules.identity.application.authentication.activation import (
+    ActivationAuditPort,
+    CompleteActivationUseCase,
+)
 from app.modules.identity.application.authentication.id_generator import (
     IdGenerator,
     Uuid4IdGenerator,
 )
 from app.modules.identity.application.authentication.identity_action_tokens import (
+    ConsumeIdentityActionToken,
     IssueIdentityActionToken,
 )
 from app.modules.identity.application.authentication.login import LoginUseCase
@@ -107,6 +118,34 @@ class _CoreActivationNotificationAdapter(ActivationNotificationPort):
         return result.notification_id
 
 
+class _CoreActivationAuditAdapter(ActivationAuditPort):
+    def __init__(self, db: DbSession) -> None:
+        self._use_case = RecordOrganizationAuditEventUseCase(
+            AuditService(SqlAlchemyAuditLogRepository(db))
+        )
+
+    def record_activation(self, *, organization_id: UUID, user_id: UUID) -> None:
+        self._use_case.execute(
+            RecordOrganizationAuditEventCommand(
+                organization_id=organization_id,
+                user_id=user_id,
+                session_id=None,
+                action="identity.activation.complete",
+                resource_type="identity_user",
+                resource_id=str(user_id),
+                old_values={
+                    "user_status": "inactive",
+                    "organization_status": "pending_activation",
+                },
+                new_values={
+                    "user_status": "active",
+                    "organization_status": "active",
+                },
+                metadata={"source": "public_account_activation"},
+            )
+        )
+
+
 @lru_cache
 def get_clock() -> Clock:
     return UtcClock()
@@ -183,6 +222,18 @@ def get_issue_identity_action_token(
         token_service=token_service,
         clock=clock,
         id_generator=id_generator,
+    )
+
+
+def get_consume_identity_action_token(
+    repository: IdentityActionTokenRepository = Depends(get_identity_action_token_repository),
+    token_service: IdentityActionTokenService = Depends(get_identity_action_token_service),
+    clock: Clock = Depends(get_clock),
+) -> ConsumeIdentityActionToken:
+    return ConsumeIdentityActionToken(
+        repository=repository,
+        token_service=token_service,
+        clock=clock,
     )
 
 
@@ -272,4 +323,23 @@ def get_public_signup_use_case(
         clock=clock,
         id_generator=id_generator,
         activation_token_ttl=timedelta(hours=settings.CORE_IDENTITY_ACTION_TOKEN_TTL_HOURS),
+    )
+
+
+def get_complete_activation_use_case(
+    db: DbSession = Depends(get_db),
+    user_repository: UserRepository = Depends(get_user_repository),
+    consume_identity_action_token: ConsumeIdentityActionToken = Depends(
+        get_consume_identity_action_token
+    ),
+    password_hasher: PasswordHasher = Depends(get_password_hasher),
+    clock: Clock = Depends(get_clock),
+) -> CompleteActivationUseCase:
+    return CompleteActivationUseCase(
+        consume_identity_action_token=consume_identity_action_token,
+        user_repository=user_repository,
+        organization_repository=SqlAlchemyOrganizationRepository(db, clock),
+        password_hasher=password_hasher,
+        clock=clock,
+        audit_port=_CoreActivationAuditAdapter(db),
     )
