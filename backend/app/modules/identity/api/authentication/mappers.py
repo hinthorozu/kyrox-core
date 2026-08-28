@@ -2,10 +2,12 @@ from fastapi import Request
 
 from app.modules.identity.api.authentication.schemas import (
     CompleteActivationRequest,
+    ForgotPasswordRequest,
     LoginRequest,
     LogoutRequest,
     PublicSignupRequest,
     RefreshRequest,
+    ResetPasswordRequest,
     TokenResponse,
 )
 from app.modules.identity.application.authentication.activation import (
@@ -16,6 +18,10 @@ from app.modules.identity.application.authentication.commands import (
     LoginCommand,
     LogoutCommand,
     RefreshSessionCommand,
+)
+from app.modules.identity.application.authentication.password_recovery import (
+    ForgotPasswordCommand,
+    ResetPasswordCommand,
 )
 from app.modules.identity.application.authentication.public_signup import PublicSignupCommand
 from app.modules.identity.application.authentication.results import AuthTokenPairResult
@@ -61,6 +67,14 @@ def activation_request_to_command(payload: CompleteActivationRequest) -> Complet
         token=payload.token,
         password=payload.password,
     )
+
+
+def forgot_password_request_to_command(payload: ForgotPasswordRequest) -> ForgotPasswordCommand:
+    return ForgotPasswordCommand(email=str(payload.email))
+
+
+def reset_password_request_to_command(payload: ResetPasswordRequest) -> ResetPasswordCommand:
+    return ResetPasswordCommand(token=payload.token, password=payload.password)
 
 
 def result_to_token_response(result: AuthTokenPairResult) -> TokenResponse:
