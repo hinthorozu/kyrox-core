@@ -58,6 +58,25 @@ class SqlAlchemyIdentityActionTokenRepository:
             return None
         return IdentityActionTokenMapper.to_domain(model)
 
+    def get_latest_for_user_purpose(
+        self,
+        user_id: UserId,
+        purpose: IdentityActionTokenPurpose,
+    ) -> IdentityActionToken | None:
+        stmt = (
+            select(IdentityActionTokenModel)
+            .where(
+                IdentityActionTokenModel.user_id == user_id.value,
+                IdentityActionTokenModel.purpose == purpose.value,
+            )
+            .order_by(IdentityActionTokenModel.created_at.desc())
+            .limit(1)
+        )
+        model = self._session.scalars(stmt).first()
+        if model is None:
+            return None
+        return IdentityActionTokenMapper.to_domain(model)
+
     def consume_if_available(
         self,
         token_hash: TokenHash,
