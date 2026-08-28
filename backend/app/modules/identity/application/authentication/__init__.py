@@ -1,3 +1,8 @@
+from app.modules.identity.application.authentication.activation import (
+    CompleteActivationCommand,
+    CompleteActivationResult,
+    CompleteActivationUseCase,
+)
 from app.modules.identity.application.authentication.commands import (
     ClientContextCommand,
     LoginCommand,
@@ -18,6 +23,9 @@ from app.modules.identity.application.authentication.revoke_all_user_sessions im
 __all__ = [
     "AuthTokenPairResult",
     "ClientContextCommand",
+    "CompleteActivationCommand",
+    "CompleteActivationResult",
+    "CompleteActivationUseCase",
     "IdGenerator",
     "LoginCommand",
     "LoginUseCase",
