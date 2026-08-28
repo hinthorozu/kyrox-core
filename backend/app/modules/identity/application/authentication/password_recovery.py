@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, timedelta
 from typing import Protocol
 from uuid import UUID
@@ -79,8 +79,8 @@ class ForgotPasswordResult:
 
 @dataclass(frozen=True, slots=True)
 class ResetPasswordCommand:
-    token: str
-    password: str
+    token: str = field(repr=False)
+    password: str = field(repr=False)
 
 
 class ForgotPasswordUseCase:
@@ -216,7 +216,7 @@ class ResetPasswordUseCase:
         user.updated_at = now
         self._user_repository.update(user)
 
-        revoked = self._revoke_all_user_sessions.execute(user.id, now)
+        revoked = self._revoke_all_user_sessions.execute(user.id)
         self._audit_port.record_password_reset(
             organization_id=user.organization_id,
             user_id=user.id.value,
