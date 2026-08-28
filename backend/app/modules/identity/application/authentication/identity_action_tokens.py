@@ -162,6 +162,8 @@ class ConsumeIdentityActionToken:
     ) -> UserId:
         token_hash = self._token_service.hash(raw_token)
         now = self._clock.now()
+        if now.tzinfo is None:
+            now = now.replace(tzinfo=UTC)
         consumed = self._repository.consume_if_available(
             token_hash,
             expected_purpose,
@@ -174,6 +176,8 @@ class ConsumeIdentityActionToken:
         if token is None:
             raise IdentityActionTokenNotFoundError("Identity action token not found")
 
+        if token.expires_at.tzinfo is None:
+            token.expires_at = token.expires_at.replace(tzinfo=UTC)
         token.consume(now, expected_purpose)
         raise IdentityActionTokenConsumedError(
             "Identity action token could not be consumed"

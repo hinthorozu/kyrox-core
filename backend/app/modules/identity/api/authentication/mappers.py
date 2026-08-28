@@ -1,11 +1,15 @@
 from fastapi import Request
 
 from app.modules.identity.api.authentication.schemas import (
+    CompleteActivationRequest,
     LoginRequest,
     LogoutRequest,
     PublicSignupRequest,
     RefreshRequest,
     TokenResponse,
+)
+from app.modules.identity.application.authentication.activation import (
+    CompleteActivationCommand,
 )
 from app.modules.identity.application.authentication.commands import (
     ClientContextCommand,
@@ -49,6 +53,13 @@ def public_signup_request_to_command(payload: PublicSignupRequest) -> PublicSign
         organization_name=payload.organization_name,
         organization_slug=payload.organization_slug,
         email=str(payload.email),
+    )
+
+
+def activation_request_to_command(payload: CompleteActivationRequest) -> CompleteActivationCommand:
+    return CompleteActivationCommand(
+        token=payload.token,
+        password=payload.password,
     )
 
 

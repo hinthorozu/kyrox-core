@@ -24,6 +24,15 @@ class PublicSignupResponse(BaseModel):
     message: str
 
 
+class CompleteActivationRequest(BaseModel):
+    token: str = Field(min_length=1)
+    password: str = Field(min_length=1, max_length=255)
+
+
+class CompleteActivationResponse(BaseModel):
+    message: str
+
+
 class TokenResponse(BaseModel):
     access_token: str
     refresh_token: str

@@ -36,3 +36,11 @@ class PublicSignupConflictError(AuthenticationError):
 
 class PublicSignupProvisioningError(AuthenticationError):
     """Public signup could not be provisioned atomically."""
+
+
+class InvalidActivationTokenError(AuthenticationError):
+    """Activation token is invalid, unavailable, expired, replayed, or inconsistent."""
+
+
+class ActivationPasswordPolicyError(AuthenticationError):
+    """Activation password does not satisfy the shared Core password policy."""
