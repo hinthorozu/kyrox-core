@@ -44,3 +44,11 @@ class InvalidActivationTokenError(AuthenticationError):
 
 class ActivationPasswordPolicyError(AuthenticationError):
     """Activation password does not satisfy the shared Core password policy."""
+
+
+class InvalidPasswordResetTokenError(AuthenticationError):
+    """Password-reset token is invalid, unavailable, expired, replayed, or inconsistent."""
+
+
+class PasswordResetPolicyError(AuthenticationError):
+    """Reset password does not satisfy the shared Core password policy."""
