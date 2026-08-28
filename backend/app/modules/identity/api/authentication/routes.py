@@ -1,6 +1,7 @@
 from fastapi import APIRouter, BackgroundTasks, Depends, Request, Response, status
 
 from app.modules.identity.api.authentication.dependencies import (
+    get_complete_activation_use_case,
     get_login_use_case,
     get_logout_use_case,
     get_public_signup_use_case,
@@ -8,6 +9,7 @@ from app.modules.identity.api.authentication.dependencies import (
 )
 from app.modules.identity.api.authentication.error_mapping import map_authentication_error
 from app.modules.identity.api.authentication.mappers import (
+    activation_request_to_command,
     login_request_to_command,
     logout_request_to_command,
     public_signup_request_to_command,
@@ -15,6 +17,8 @@ from app.modules.identity.api.authentication.mappers import (
     result_to_token_response,
 )
 from app.modules.identity.api.authentication.schemas import (
+    CompleteActivationRequest,
+    CompleteActivationResponse,
     ErrorResponse,
     LoginRequest,
     LogoutRequest,
@@ -22,6 +26,9 @@ from app.modules.identity.api.authentication.schemas import (
     PublicSignupResponse,
     RefreshRequest,
     TokenResponse,
+)
+from app.modules.identity.application.authentication.activation import (
+    CompleteActivationUseCase,
 )
 from app.modules.identity.application.authentication.login import LoginUseCase
 from app.modules.identity.application.authentication.logout import LogoutUseCase
@@ -60,6 +67,28 @@ def public_signup(
     worker_scheduler.schedule(background_tasks)
     return PublicSignupResponse(
         message="Signup accepted. Check your email to activate your account."
+    )
+
+
+@router.post(
+    "/activation/complete",
+    response_model=CompleteActivationResponse,
+    responses={
+        400: {"model": ErrorResponse},
+        422: {"model": ErrorResponse},
+    },
+)
+def complete_activation(
+    payload: CompleteActivationRequest,
+    use_case: CompleteActivationUseCase = Depends(get_complete_activation_use_case),
+) -> CompleteActivationResponse:
+    try:
+        use_case.execute(activation_request_to_command(payload))
+    except AuthenticationError as exc:
+        raise map_authentication_error(exc) from exc
+
+    return CompleteActivationResponse(
+        message="Account activated. You can now sign in."
     )
 
 
