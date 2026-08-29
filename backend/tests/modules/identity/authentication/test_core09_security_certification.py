@@ -11,6 +11,9 @@ from app.core.config import settings
 from app.db.base import Base
 from app.db.session import get_db
 from app.main import create_app
+from app.modules.identity.domain.authentication.value_objects.identity.identity_action_token_id import (
+    IdentityActionTokenId,
+)
 from app.modules.identity.domain.authorization.entities.role import Role
 from app.modules.identity.domain.authorization.enums.role_scope import RoleScope
 from app.modules.identity.domain.authorization.value_objects.identity.role_id import RoleId
@@ -157,6 +160,10 @@ def test_activation_token_for_org_a_cannot_mutate_org_b(
             )
             assert user_a is not None and user_b is not None
             assert user_a.organization_id != user_b.organization_id
+            user_a_id = user_a.id
+            user_b_id = user_b.id
+            org_a_id = user_a.organization_id
+            org_b_id = user_b.organization_id
 
             token_a = db_session.scalar(
                 select(IdentityActionTokenModel).where(
@@ -171,10 +178,11 @@ def test_activation_token_for_org_a_cannot_mutate_org_b(
                 )
             )
             assert token_a is not None and token_b is not None
+            token_b_id = token_b.id
 
             raw_token_a = IdentityActionTokenService(
                 settings.CORE_IDENTITY_ACTION_TOKEN_SECRET_KEY
-            ).derive_from_uuid(token_a.id)
+            ).derive(IdentityActionTokenId(token_a.id))
 
             activate_a = client.post(
                 "/api/v1/auth/activation/complete",
@@ -183,11 +191,11 @@ def test_activation_token_for_org_a_cannot_mutate_org_b(
             assert activate_a.status_code == 200, activate_a.text
 
         db_session.expire_all()
-        user_a = db_session.get(UserModel, user_a.id)
-        user_b = db_session.get(UserModel, user_b.id)
-        org_a = db_session.get(OrganizationModel, user_a.organization_id)
-        org_b = db_session.get(OrganizationModel, user_b.organization_id)
-        token_b = db_session.get(IdentityActionTokenModel, token_b.id)
+        user_a = db_session.get(UserModel, user_a_id)
+        user_b = db_session.get(UserModel, user_b_id)
+        org_a = db_session.get(OrganizationModel, org_a_id)
+        org_b = db_session.get(OrganizationModel, org_b_id)
+        token_b = db_session.get(IdentityActionTokenModel, token_b_id)
 
         assert user_a is not None and user_a.status == "active"
         assert org_a is not None and org_a.status == "active"
