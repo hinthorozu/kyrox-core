@@ -1,6 +1,9 @@
+from uuid import UUID
+
 from fastapi import Request
 
 from app.modules.identity.api.authentication.schemas import (
+    ChangePasswordRequest,
     CompleteActivationRequest,
     ForgotPasswordRequest,
     LoginRequest,
@@ -19,6 +22,7 @@ from app.modules.identity.application.authentication.commands import (
     LogoutCommand,
     RefreshSessionCommand,
 )
+from app.modules.identity.application.authentication.password_change import ChangePasswordCommand
 from app.modules.identity.application.authentication.password_recovery import (
     ForgotPasswordCommand,
     ResetPasswordCommand,
@@ -75,6 +79,18 @@ def forgot_password_request_to_command(payload: ForgotPasswordRequest) -> Forgot
 
 def reset_password_request_to_command(payload: ResetPasswordRequest) -> ResetPasswordCommand:
     return ResetPasswordCommand(token=payload.token, password=payload.password)
+
+
+def change_password_request_to_command(
+    payload: ChangePasswordRequest,
+    *,
+    user_id: UUID,
+) -> ChangePasswordCommand:
+    return ChangePasswordCommand(
+        user_id=user_id,
+        current_password=payload.current_password,
+        new_password=payload.new_password,
+    )
 
 
 def result_to_token_response(result: AuthTokenPairResult) -> TokenResponse:
