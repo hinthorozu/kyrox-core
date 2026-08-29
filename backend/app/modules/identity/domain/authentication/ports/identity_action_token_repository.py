@@ -23,6 +23,12 @@ class IdentityActionTokenRepository(Protocol):
 
     def get_by_token_hash(self, token_hash: TokenHash) -> IdentityActionToken | None: ...
 
+    def get_latest_for_user_purpose(
+        self,
+        user_id: UserId,
+        purpose: IdentityActionTokenPurpose,
+    ) -> IdentityActionToken | None: ...
+
     def consume_if_available(
         self,
         token_hash: TokenHash,

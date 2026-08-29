@@ -29,6 +29,8 @@ class Settings(BaseSettings):
         "dev-insecure-identity-action-token-secret-change-me"
     )
     CORE_IDENTITY_ACTION_TOKEN_TTL_HOURS: int = 24
+    CORE_IDENTITY_PASSWORD_RESET_TTL_MINUTES: int = 60
+    CORE_IDENTITY_PASSWORD_RESET_COOLDOWN_SECONDS: int = 60
     CORE_IDENTITY_ACTIVATION_URL_TEMPLATE: str = (
         "http://localhost:3000/activate?token={token}"
     )
