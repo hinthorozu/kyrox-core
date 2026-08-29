@@ -9,11 +9,15 @@ from app.modules.identity.domain.authentication.exceptions import (
 from app.modules.identity.domain.authentication.exceptions.authentication import (
     ActivationPasswordPolicyError,
     InvalidActivationTokenError,
+    InvalidCurrentPasswordError,
     InvalidPasswordResetTokenError,
+    PasswordChangePolicyError,
+    PasswordChangeUnavailableError,
     PasswordResetPolicyError,
     PublicSignupConflictError,
     PublicSignupProvisioningError,
     PublicSignupValidationError,
+    SamePasswordError,
 )
 
 
@@ -49,4 +53,15 @@ def map_authentication_error(exc: AuthenticationError) -> AppException:
             "Password does not satisfy the Core password policy",
             status_code=422,
         )
+    if isinstance(exc, InvalidCurrentPasswordError):
+        return AppException("Current password is incorrect", status_code=400)
+    if isinstance(exc, PasswordChangePolicyError):
+        return AppException(
+            "Password does not satisfy the Core password policy",
+            status_code=422,
+        )
+    if isinstance(exc, SamePasswordError):
+        return AppException("New password must differ from current password", status_code=422)
+    if isinstance(exc, PasswordChangeUnavailableError):
+        return AppException("Password change is unavailable", status_code=403)
     return AppException(str(exc), status_code=401)

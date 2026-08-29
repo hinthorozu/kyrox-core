@@ -1,6 +1,10 @@
 from fastapi import APIRouter, BackgroundTasks, Depends, Request, Response, status
 
+from app.modules.identity.api.authentication.access_guard import (
+    get_authenticated_access_token_claims,
+)
 from app.modules.identity.api.authentication.dependencies import (
+    get_change_password_use_case,
     get_complete_activation_use_case,
     get_forgot_password_use_case,
     get_login_use_case,
@@ -12,6 +16,7 @@ from app.modules.identity.api.authentication.dependencies import (
 from app.modules.identity.api.authentication.error_mapping import map_authentication_error
 from app.modules.identity.api.authentication.mappers import (
     activation_request_to_command,
+    change_password_request_to_command,
     forgot_password_request_to_command,
     login_request_to_command,
     logout_request_to_command,
@@ -21,6 +26,8 @@ from app.modules.identity.api.authentication.mappers import (
     result_to_token_response,
 )
 from app.modules.identity.api.authentication.schemas import (
+    ChangePasswordRequest,
+    ChangePasswordResponse,
     CompleteActivationRequest,
     CompleteActivationResponse,
     ErrorResponse,
@@ -40,6 +47,7 @@ from app.modules.identity.application.authentication.activation import (
 )
 from app.modules.identity.application.authentication.login import LoginUseCase
 from app.modules.identity.application.authentication.logout import LogoutUseCase
+from app.modules.identity.application.authentication.password_change import ChangePasswordUseCase
 from app.modules.identity.application.authentication.password_recovery import (
     ForgotPasswordUseCase,
     ResetPasswordUseCase,
@@ -47,6 +55,9 @@ from app.modules.identity.application.authentication.password_recovery import (
 from app.modules.identity.application.authentication.public_signup import PublicSignupUseCase
 from app.modules.identity.application.authentication.refresh_session import RefreshSessionUseCase
 from app.modules.identity.domain.authentication.exceptions import AuthenticationError
+from app.modules.identity.domain.authentication.value_objects.security.access_token import (
+    AccessTokenClaims,
+)
 from app.modules.notifications.api.dependencies import (
     NotificationWorkerScheduler,
     get_notification_worker_scheduler,
@@ -141,6 +152,36 @@ def reset_password(
 
     return ResetPasswordResponse(
         message="Password reset. Sign in with your new password."
+    )
+
+
+@router.post(
+    "/password/change",
+    response_model=ChangePasswordResponse,
+    responses={
+        400: {"model": ErrorResponse},
+        401: {"model": ErrorResponse},
+        403: {"model": ErrorResponse},
+        422: {"model": ErrorResponse},
+    },
+)
+def change_password(
+    payload: ChangePasswordRequest,
+    claims: AccessTokenClaims = Depends(get_authenticated_access_token_claims),
+    use_case: ChangePasswordUseCase = Depends(get_change_password_use_case),
+) -> ChangePasswordResponse:
+    try:
+        use_case.execute(
+            change_password_request_to_command(
+                payload,
+                user_id=claims.sub.value,
+            )
+        )
+    except AuthenticationError as exc:
+        raise map_authentication_error(exc) from exc
+
+    return ChangePasswordResponse(
+        message="Password changed. Sign in again with your new password."
     )
 
 

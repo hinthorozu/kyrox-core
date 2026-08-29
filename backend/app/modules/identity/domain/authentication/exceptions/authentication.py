@@ -52,3 +52,19 @@ class InvalidPasswordResetTokenError(AuthenticationError):
 
 class PasswordResetPolicyError(AuthenticationError):
     """Reset password does not satisfy the shared Core password policy."""
+
+
+class InvalidCurrentPasswordError(AuthenticationError):
+    """Authenticated password change supplied the wrong current password."""
+
+
+class PasswordChangePolicyError(AuthenticationError):
+    """New password does not satisfy the shared Core password policy."""
+
+
+class SamePasswordError(AuthenticationError):
+    """New password is the same as the current password."""
+
+
+class PasswordChangeUnavailableError(AuthenticationError):
+    """Target account is not eligible for authenticated password change."""
