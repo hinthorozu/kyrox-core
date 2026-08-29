@@ -184,6 +184,13 @@ def test_activation_token_for_org_a_cannot_mutate_org_b(
                 settings.CORE_IDENTITY_ACTION_TOKEN_SECRET_KEY
             ).derive(IdentityActionTokenId(token_a.id))
 
+            # This fixture deliberately reuses one SQLite Session across HTTP
+            # requests. Detach previously loaded A/B token rows before the
+            # activation UPDATE so SQLAlchemy does not Python-evaluate the
+            # timezone-aware predicate against SQLite's naive datetime
+            # roundtrip for unrelated in-memory token B.
+            db_session.expunge_all()
+
             activate_a = client.post(
                 "/api/v1/auth/activation/complete",
                 json={"token": raw_token_a, "password": _VALID_PASSWORD},
