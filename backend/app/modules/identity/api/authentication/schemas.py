@@ -50,6 +50,15 @@ class ResetPasswordResponse(BaseModel):
     message: str
 
 
+class ChangePasswordRequest(BaseModel):
+    current_password: str = Field(min_length=1, max_length=255)
+    new_password: str = Field(min_length=1, max_length=255)
+
+
+class ChangePasswordResponse(BaseModel):
+    message: str
+
+
 class TokenResponse(BaseModel):
     access_token: str
     refresh_token: str
