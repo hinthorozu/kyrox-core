@@ -1,5 +1,8 @@
 from fastapi import APIRouter, BackgroundTasks, Depends, Request, Response, status
 
+from app.modules.identity.api.authentication.access_guard import (
+    get_authenticated_access_token_claims,
+)
 from app.modules.identity.api.authentication.dependencies import (
     get_change_password_use_case,
     get_complete_activation_use_case,
@@ -39,7 +42,6 @@ from app.modules.identity.api.authentication.schemas import (
     ResetPasswordResponse,
     TokenResponse,
 )
-from app.modules.identity.api.authorization.guards import get_access_token_claims
 from app.modules.identity.application.authentication.activation import (
     CompleteActivationUseCase,
 )
@@ -165,7 +167,7 @@ def reset_password(
 )
 def change_password(
     payload: ChangePasswordRequest,
-    claims: AccessTokenClaims = Depends(get_access_token_claims),
+    claims: AccessTokenClaims = Depends(get_authenticated_access_token_claims),
     use_case: ChangePasswordUseCase = Depends(get_change_password_use_case),
 ) -> ChangePasswordResponse:
     try:
