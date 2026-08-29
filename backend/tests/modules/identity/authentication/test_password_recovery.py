@@ -314,11 +314,17 @@ def test_password_reset_revokes_prior_credentials_and_allows_only_new_password(
             )
             assert old_refresh_response.status_code == 401
 
-        session = db_session.scalar(
-            select(SessionModel).where(SessionModel.user_id == user_id)
+        revoked_session = db_session.scalar(
+            select(SessionModel).where(
+                SessionModel.user_id == user_id,
+                SessionModel.revoked_at.is_not(None),
+            )
         )
+        assert revoked_session is not None
         refresh_token = db_session.scalar(
-            select(RefreshTokenModel).where(RefreshTokenModel.user_id == user_id)
+            select(RefreshTokenModel).where(
+                RefreshTokenModel.session_id == revoked_session.id
+            )
         )
         audit = db_session.scalar(
             select(AuditLogModel).where(
@@ -327,7 +333,7 @@ def test_password_reset_revokes_prior_credentials_and_allows_only_new_password(
                 AuditLogModel.action == "identity.password.reset",
             )
         )
-        assert session is not None and session.revoked_at is not None
+        assert revoked_session.revoked_at is not None
         assert refresh_token is not None and refresh_token.revoked_at is not None
         assert audit is not None
         serialized_audit = json.dumps(
