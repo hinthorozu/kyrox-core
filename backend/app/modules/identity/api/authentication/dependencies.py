@@ -28,6 +28,10 @@ from app.modules.identity.application.authentication.identity_action_tokens impo
 )
 from app.modules.identity.application.authentication.login import LoginUseCase
 from app.modules.identity.application.authentication.logout import LogoutUseCase
+from app.modules.identity.application.authentication.password_change import (
+    ChangePasswordUseCase,
+    PasswordChangeAuditPort,
+)
 from app.modules.identity.application.authentication.password_recovery import (
     ForgotPasswordUseCase,
     PasswordResetAuditPort,
@@ -211,6 +215,36 @@ class _CorePasswordResetAuditAdapter(PasswordResetAuditPort):
                 new_values={"credential_replaced": True},
                 metadata={
                     "source": "public_password_reset",
+                    "sessions_revoked": sessions_revoked,
+                    "refresh_tokens_revoked": refresh_tokens_revoked,
+                },
+            )
+        )
+
+
+class _CorePasswordChangeAuditAdapter(PasswordChangeAuditPort):
+    def __init__(self, db: DbSession) -> None:
+        self._audit_service = AuditService(SqlAlchemyAuditLogRepository(db))
+
+    def record_password_change(
+        self,
+        *,
+        organization_id: UUID | None,
+        user_id: UUID,
+        sessions_revoked: int,
+        refresh_tokens_revoked: int,
+    ) -> None:
+        self._audit_service.record(
+            RecordAuditEventCommand(
+                organization_id=organization_id,
+                user_id=user_id,
+                session_id=None,
+                action="identity.password.change",
+                resource_type="identity_user",
+                resource_id=str(user_id),
+                new_values={"credential_replaced": True},
+                metadata={
+                    "source": "authenticated_password_change",
                     "sessions_revoked": sessions_revoked,
                     "refresh_tokens_revoked": refresh_tokens_revoked,
                 },
@@ -474,4 +508,27 @@ def get_reset_password_use_case(
         ),
         clock=clock,
         audit_port=_CorePasswordResetAuditAdapter(db),
+    )
+
+
+def get_change_password_use_case(
+    db: DbSession = Depends(get_db),
+    user_repository: UserRepository = Depends(get_user_repository),
+    password_hasher: PasswordHasher = Depends(get_password_hasher),
+    session_repository: SessionRepository = Depends(get_session_repository),
+    refresh_token_repository: RefreshTokenRepository = Depends(
+        get_refresh_token_repository
+    ),
+    clock: Clock = Depends(get_clock),
+) -> ChangePasswordUseCase:
+    return ChangePasswordUseCase(
+        user_repository=user_repository,
+        password_hasher=password_hasher,
+        revoke_all_user_sessions=RevokeAllUserSessionsUseCase(
+            session_repository=session_repository,
+            refresh_token_repository=refresh_token_repository,
+            clock=clock,
+        ),
+        clock=clock,
+        audit_port=_CorePasswordChangeAuditAdapter(db),
     )
