@@ -27,6 +27,9 @@ from app.modules.identity.domain.authentication.entities.user import User
 from app.modules.identity.domain.authentication.enums.user_status import UserStatus
 from app.modules.identity.domain.authentication.value_objects.identity.user_id import UserId
 from app.modules.identity.domain.authentication.value_objects.security.email import Email
+from app.modules.identity.domain.authentication.value_objects.security.password_hash import (
+    PasswordHash,
+)
 from app.modules.identity.domain.organization.entities.organization import Organization
 from app.modules.identity.domain.organization.enums.organization_status import OrganizationStatus
 from app.modules.identity.domain.organization.value_objects.identity.organization_id import (
@@ -208,8 +211,11 @@ def test_password_change_rejects_wrong_current_weak_and_same_password_without_re
             assert refresh_after_failures.status_code == 200
 
         user_model = db_session.get(UserModel, user_id)
-        assert user_model is not None
-        assert Argon2idPasswordHasher().verify(_OLD_PASSWORD, user_model.password_hash)
+        assert user_model is not None and user_model.password_hash is not None
+        assert Argon2idPasswordHasher().verify(
+            _OLD_PASSWORD,
+            PasswordHash(user_model.password_hash),
+        )
     finally:
         app.dependency_overrides.clear()
 
@@ -352,10 +358,11 @@ def test_password_change_rolls_back_hash_and_revocation_if_audit_fails(
     db_session.rollback()
 
     user_model = db_session.get(UserModel, user_id)
-    assert user_model is not None
+    assert user_model is not None and user_model.password_hash is not None
     hasher = Argon2idPasswordHasher()
-    assert hasher.verify(_OLD_PASSWORD, user_model.password_hash)
-    assert not hasher.verify(_NEW_PASSWORD, user_model.password_hash)
+    persisted_hash = PasswordHash(user_model.password_hash)
+    assert hasher.verify(_OLD_PASSWORD, persisted_hash)
+    assert not hasher.verify(_NEW_PASSWORD, persisted_hash)
 
     active_session = db_session.scalar(
         select(SessionModel).where(
