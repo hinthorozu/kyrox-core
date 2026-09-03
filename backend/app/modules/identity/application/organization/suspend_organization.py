@@ -1,3 +1,6 @@
+from app.modules.identity.application.authentication.revoke_organization_sessions import (
+    RevokeOrganizationSessionsUseCase,
+)
 from app.modules.identity.application.organization.commands import SuspendOrganizationCommand
 from app.modules.identity.application.organization.mappers import to_organization_result
 from app.modules.identity.application.organization.results import OrganizationResult
@@ -10,9 +13,11 @@ class SuspendOrganizationUseCase:
     def __init__(
         self,
         organization_repository: OrganizationRepository,
+        revoke_organization_sessions: RevokeOrganizationSessionsUseCase,
         clock: Clock,
     ) -> None:
         self._organization_repository = organization_repository
+        self._revoke_organization_sessions = revoke_organization_sessions
         self._clock = clock
 
     def execute(self, command: SuspendOrganizationCommand) -> OrganizationResult:
@@ -24,4 +29,5 @@ class SuspendOrganizationUseCase:
 
         organization.suspend(self._clock.now())
         organization = self._organization_repository.update(organization)
+        self._revoke_organization_sessions.execute(command.organization_id.value)
         return to_organization_result(organization)
