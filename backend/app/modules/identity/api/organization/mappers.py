@@ -9,6 +9,7 @@ from app.modules.identity.application.organization.commands import (
     DeleteOrganizationCommand,
     GetOrganizationCommand,
     ListOrganizationsCommand,
+    ReactivateOrganizationCommand,
     SuspendOrganizationCommand,
     UpdateOrganizationCommand,
 )
@@ -59,6 +60,10 @@ def delete_organization_command(organization_id: OrganizationId) -> DeleteOrgani
 
 def suspend_organization_command(organization_id: OrganizationId) -> SuspendOrganizationCommand:
     return SuspendOrganizationCommand(organization_id=organization_id)
+
+
+def reactivate_organization_command(organization_id: OrganizationId) -> ReactivateOrganizationCommand:
+    return ReactivateOrganizationCommand(organization_id=organization_id)
 
 
 def organization_result_to_response(result: OrganizationResult) -> OrganizationResponse:
