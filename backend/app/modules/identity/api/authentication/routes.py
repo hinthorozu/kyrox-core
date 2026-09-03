@@ -12,7 +12,7 @@ from app.modules.identity.api.authentication.dependencies import (
     get_reset_password_use_case,
 )
 from app.modules.identity.api.authentication.error_mapping import map_authentication_error
-from app.modules.identity.api.authentication.lifecycle_dependencies import (
+from app.modules.identity.api.authentication.lifecycle.dependencies import (
     get_lifecycle_aware_login_use_case,
     get_lifecycle_aware_refresh_session_use_case,
 )
