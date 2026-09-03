@@ -1,3 +1,5 @@
+from uuid import UUID
+
 from sqlalchemy import select
 from sqlalchemy.orm import Session as DbSession
 
@@ -16,6 +18,7 @@ from app.modules.identity.infrastructure.authentication.persistence.models.refre
     RefreshTokenModel,
 )
 from app.modules.identity.infrastructure.authentication.persistence.models.session import SessionModel
+from app.modules.identity.infrastructure.persistence.models import UserModel
 
 
 class SqlAlchemyRefreshTokenRepository:
@@ -86,6 +89,27 @@ class SqlAlchemyRefreshTokenRepository:
             .join(SessionModel, SessionModel.id == RefreshTokenModel.session_id)
             .where(
                 SessionModel.user_id == user_id.value,
+                RefreshTokenModel.revoked_at.is_(None),
+                RefreshTokenModel.used_at.is_(None),
+                RefreshTokenModel.expires_at > now,
+            )
+            .order_by(RefreshTokenModel.created_at.asc())
+        )
+        return [
+            RefreshTokenMapper.to_domain(model)
+            for model in self._session.scalars(stmt).all()
+        ]
+
+    def get_active_by_organization_id(self, organization_id: UUID) -> list[RefreshToken]:
+        now = self._clock.now()
+        stmt = (
+            select(RefreshTokenModel)
+            .join(SessionModel, SessionModel.id == RefreshTokenModel.session_id)
+            .join(UserModel, UserModel.id == SessionModel.user_id)
+            .where(
+                UserModel.organization_id == organization_id,
+                UserModel.is_super_admin.is_(False),
+                UserModel.deleted_at.is_(None),
                 RefreshTokenModel.revoked_at.is_(None),
                 RefreshTokenModel.used_at.is_(None),
                 RefreshTokenModel.expires_at > now,
