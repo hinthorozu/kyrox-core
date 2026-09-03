@@ -105,6 +105,7 @@ def test_get_organization_scope_mismatch_returns_400(
     ("method", "suffix"),
     [
         ("POST", "/suspend"),
+        ("POST", "/reactivate"),
         ("DELETE", ""),
     ],
 )
@@ -128,6 +129,7 @@ def test_lifecycle_endpoints_require_authentication(
     ("method", "suffix"),
     [
         ("POST", "/suspend"),
+        ("POST", "/reactivate"),
         ("DELETE", ""),
     ],
 )
@@ -161,6 +163,7 @@ def test_organization_user_cannot_execute_system_lifecycle_actions(
     ("method", "suffix"),
     [
         ("POST", "/suspend"),
+        ("POST", "/reactivate"),
         ("DELETE", ""),
     ],
 )
@@ -224,6 +227,78 @@ def test_super_admin_can_suspend_organization_and_transition_is_audited(
     assert audit_log.resource_id == str(organization_id)
     assert audit_log.new_values == {"status": "suspended"}
     assert audit_log.event_metadata == {"authority": "system"}
+
+
+def test_super_admin_can_reactivate_suspended_organization_and_transition_is_audited(
+    client: TestClient,
+    db_session: Session,
+) -> None:
+    actor_user_id, token = _login_super_admin(client, db_session)
+    organization_id = _create_organization_as_super_admin(client, token)
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "X-Organization-Id": str(organization_id),
+    }
+
+    suspend_response = client.post(
+        _lifecycle_path(organization_id, "/suspend"),
+        headers=headers,
+    )
+    assert suspend_response.status_code == 200, suspend_response.text
+
+    response = client.post(
+        _lifecycle_path(organization_id, "/reactivate"),
+        headers=headers,
+    )
+
+    assert response.status_code == 200, response.text
+    assert response.json()["status"] == "active"
+
+    organization_model = db_session.get(OrganizationModel, organization_id)
+    assert organization_model is not None
+    assert organization_model.status == "active"
+
+    audit_log = db_session.scalars(
+        select(AuditLogModel).where(
+            AuditLogModel.organization_id == organization_id,
+            AuditLogModel.action == "identity.organization.reactivated",
+        )
+    ).one()
+    assert audit_log.user_id == actor_user_id
+    assert audit_log.session_id is not None
+    assert audit_log.resource_type == "organization"
+    assert audit_log.resource_id == str(organization_id)
+    assert audit_log.new_values == {"status": "active"}
+    assert audit_log.event_metadata == {"authority": "system"}
+
+
+def test_super_admin_cannot_reactivate_active_organization_and_no_audit_is_written(
+    client: TestClient,
+    db_session: Session,
+) -> None:
+    _, token = _login_super_admin(client, db_session)
+    organization_id = _create_organization_as_super_admin(client, token)
+
+    response = client.post(
+        _lifecycle_path(organization_id, "/reactivate"),
+        headers={
+            "Authorization": f"Bearer {token}",
+            "X-Organization-Id": str(organization_id),
+        },
+    )
+
+    assert response.status_code == 409, response.text
+    organization_model = db_session.get(OrganizationModel, organization_id)
+    assert organization_model is not None
+    assert organization_model.status == "active"
+
+    audit_logs = db_session.scalars(
+        select(AuditLogModel).where(
+            AuditLogModel.organization_id == organization_id,
+            AuditLogModel.action == "identity.organization.reactivated",
+        )
+    ).all()
+    assert audit_logs == []
 
 
 def test_super_admin_can_delete_organization_and_transition_is_audited(
