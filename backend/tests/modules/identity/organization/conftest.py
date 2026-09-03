@@ -9,6 +9,7 @@ from sqlalchemy.pool import StaticPool
 from app.db.base import Base
 from app.db.session import get_db
 from app.main import create_app
+from app.modules.audit.infrastructure.persistence import models as audit_models  # noqa: F401
 from app.modules.identity.infrastructure.persistence import models as identity_models  # noqa: F401
 
 
