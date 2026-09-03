@@ -23,6 +23,10 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_DAYS: int = 15
     REFRESH_TOKEN_EXPIRE_DAYS: int = 15
 
+    # Purpose-separated read-only credential used by products to ask Core for
+    # organization lifecycle eligibility at background-work checkpoints.
+    CORE_PRODUCT_LIFECYCLE_TOKEN: str = "dev-insecure-product-lifecycle-token-change-me"
+
     # Dedicated secret for reconstructable, hash-only persisted identity action
     # tokens used by asynchronous identity-email delivery.
     CORE_IDENTITY_ACTION_TOKEN_SECRET_KEY: str = (
