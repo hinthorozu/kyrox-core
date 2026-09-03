@@ -1,3 +1,5 @@
+from uuid import UUID
+
 from sqlalchemy import select
 from sqlalchemy.orm import Session as DbSession
 
@@ -8,6 +10,7 @@ from app.modules.identity.infrastructure.authentication.persistence.mappers.sess
     SessionMapper,
 )
 from app.modules.identity.infrastructure.authentication.persistence.models.session import SessionModel
+from app.modules.identity.infrastructure.persistence.models import UserModel
 
 
 class SqlAlchemySessionRepository:
@@ -50,6 +53,20 @@ class SqlAlchemySessionRepository:
             select(SessionModel)
             .where(
                 SessionModel.user_id == user_id.value,
+                SessionModel.revoked_at.is_(None),
+            )
+            .order_by(SessionModel.created_at.asc())
+        )
+        return [SessionMapper.to_domain(model) for model in self._session.scalars(stmt).all()]
+
+    def get_active_by_organization_id(self, organization_id: UUID) -> list[Session]:
+        stmt = (
+            select(SessionModel)
+            .join(UserModel, UserModel.id == SessionModel.user_id)
+            .where(
+                UserModel.organization_id == organization_id,
+                UserModel.is_super_admin.is_(False),
+                UserModel.deleted_at.is_(None),
                 SessionModel.revoked_at.is_(None),
             )
             .order_by(SessionModel.created_at.asc())
