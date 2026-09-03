@@ -36,3 +36,8 @@ class DeleteOrganizationCommand:
 @dataclass(frozen=True, slots=True)
 class SuspendOrganizationCommand:
     organization_id: OrganizationId
+
+
+@dataclass(frozen=True, slots=True)
+class ReactivateOrganizationCommand:
+    organization_id: OrganizationId
