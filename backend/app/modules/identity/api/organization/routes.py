@@ -2,6 +2,11 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, Response, status
 
+from app.modules.audit.api.dependencies import get_record_organization_audit_event_use_case
+from app.modules.audit.application.record_organization_audit_event import (
+    RecordOrganizationAuditEventCommand,
+    RecordOrganizationAuditEventUseCase,
+)
 from app.modules.identity.api.authorization.context import AuthorizationContext
 from app.modules.identity.api.authorization.dependencies import get_platform_user_reader
 from app.modules.identity.api.authorization.guards import (
@@ -54,6 +59,29 @@ from app.modules.identity.domain.organization.exceptions import OrganizationErro
 from app.modules.identity.domain.organization.value_objects.identity.organization_id import OrganizationId
 
 router = APIRouter(prefix="/organizations", tags=["organizations"])
+
+
+def _record_lifecycle_audit(
+    *,
+    organization_id: UUID,
+    context: AuthorizationContext,
+    claims: AccessTokenClaims,
+    action: str,
+    new_values: dict[str, object],
+    audit_use_case: RecordOrganizationAuditEventUseCase,
+) -> None:
+    audit_use_case.execute(
+        RecordOrganizationAuditEventCommand(
+            organization_id=organization_id,
+            user_id=context.user_id,
+            session_id=claims.sid.value,
+            action=action,
+            resource_type="organization",
+            resource_id=str(organization_id),
+            new_values=new_values,
+            metadata={"authority": "system"},
+        )
+    )
 
 
 @router.post(
@@ -167,11 +195,23 @@ def update_organization(
 def delete_organization(
     organization_id: UUID,
     context: AuthorizationContext = Depends(require_permission("identity.organizations.delete")),
+    claims: AccessTokenClaims = Depends(get_access_token_claims),
     use_case: DeleteOrganizationUseCase = Depends(get_delete_organization_use_case),
+    audit_use_case: RecordOrganizationAuditEventUseCase = Depends(
+        get_record_organization_audit_event_use_case
+    ),
 ) -> Response:
     assert_organization_scope(organization_id, context)
     try:
         use_case.execute(delete_organization_command(OrganizationId(organization_id)))
+        _record_lifecycle_audit(
+            organization_id=organization_id,
+            context=context,
+            claims=claims,
+            action="identity.organization.deleted",
+            new_values={"deleted": True},
+            audit_use_case=audit_use_case,
+        )
     except OrganizationError as exc:
         raise map_organization_error(exc) from exc
     return Response(status_code=status.HTTP_204_NO_CONTENT)
@@ -190,11 +230,23 @@ def delete_organization(
 def suspend_organization(
     organization_id: UUID,
     context: AuthorizationContext = Depends(require_permission("identity.organizations.suspend")),
+    claims: AccessTokenClaims = Depends(get_access_token_claims),
     use_case: SuspendOrganizationUseCase = Depends(get_suspend_organization_use_case),
+    audit_use_case: RecordOrganizationAuditEventUseCase = Depends(
+        get_record_organization_audit_event_use_case
+    ),
 ) -> OrganizationResponse:
     assert_organization_scope(organization_id, context)
     try:
         result = use_case.execute(suspend_organization_command(OrganizationId(organization_id)))
+        _record_lifecycle_audit(
+            organization_id=organization_id,
+            context=context,
+            claims=claims,
+            action="identity.organization.suspended",
+            new_values={"status": result.status.value},
+            audit_use_case=audit_use_case,
+        )
     except OrganizationError as exc:
         raise map_organization_error(exc) from exc
 
