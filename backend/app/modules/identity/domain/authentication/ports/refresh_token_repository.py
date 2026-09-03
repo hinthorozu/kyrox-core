@@ -1,4 +1,5 @@
 from typing import Protocol
+from uuid import UUID
 
 from app.modules.identity.domain.authentication.entities.refresh_token import RefreshToken
 from app.modules.identity.domain.authentication.value_objects.identity.refresh_token_id import (
@@ -23,3 +24,5 @@ class RefreshTokenRepository(Protocol):
     def get_active_by_session_id(self, session_id: SessionId) -> RefreshToken | None: ...
 
     def get_active_by_user_id(self, user_id: UserId) -> list[RefreshToken]: ...
+
+    def get_active_by_organization_id(self, organization_id: UUID) -> list[RefreshToken]: ...
