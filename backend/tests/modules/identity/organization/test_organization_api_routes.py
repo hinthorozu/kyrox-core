@@ -272,12 +272,18 @@ def test_super_admin_can_reactivate_suspended_organization_and_transition_is_aud
     assert audit_log.event_metadata == {"authority": "system"}
 
 
-def test_super_admin_cannot_reactivate_active_organization_and_no_audit_is_written(
+@pytest.mark.parametrize("source_status", ["active", "pending_activation", "archived"])
+def test_super_admin_cannot_reactivate_non_suspended_organization_and_no_audit_is_written(
     client: TestClient,
     db_session: Session,
+    source_status: str,
 ) -> None:
     _, token = _login_super_admin(client, db_session)
     organization_id = _create_organization_as_super_admin(client, token)
+    organization_model = db_session.get(OrganizationModel, organization_id)
+    assert organization_model is not None
+    organization_model.status = source_status
+    db_session.commit()
 
     response = client.post(
         _lifecycle_path(organization_id, "/reactivate"),
@@ -288,9 +294,44 @@ def test_super_admin_cannot_reactivate_active_organization_and_no_audit_is_writt
     )
 
     assert response.status_code == 409, response.text
+    db_session.refresh(organization_model)
+    assert organization_model.status == source_status
+
+    audit_logs = db_session.scalars(
+        select(AuditLogModel).where(
+            AuditLogModel.organization_id == organization_id,
+            AuditLogModel.action == "identity.organization.reactivated",
+        )
+    ).all()
+    assert audit_logs == []
+
+
+def test_super_admin_cannot_reactivate_soft_deleted_organization(
+    client: TestClient,
+    db_session: Session,
+) -> None:
+    _, token = _login_super_admin(client, db_session)
+    organization_id = _create_organization_as_super_admin(client, token)
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "X-Organization-Id": str(organization_id),
+    }
+
+    delete_response = client.delete(
+        _lifecycle_path(organization_id, ""),
+        headers=headers,
+    )
+    assert delete_response.status_code == 204, delete_response.text
+
+    response = client.post(
+        _lifecycle_path(organization_id, "/reactivate"),
+        headers=headers,
+    )
+
+    assert response.status_code == 404, response.text
     organization_model = db_session.get(OrganizationModel, organization_id)
     assert organization_model is not None
-    assert organization_model.status == "active"
+    assert organization_model.deleted_at is not None
 
     audit_logs = db_session.scalars(
         select(AuditLogModel).where(
