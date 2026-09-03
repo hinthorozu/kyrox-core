@@ -21,6 +21,7 @@ from app.modules.identity.api.organization.dependencies import (
     get_delete_organization_use_case,
     get_get_organization_use_case,
     get_list_organizations_use_case,
+    get_reactivate_organization_use_case,
     get_suspend_organization_use_case,
     get_update_organization_use_case,
 )
@@ -36,6 +37,7 @@ from app.modules.identity.api.organization.mappers import (
     list_organizations_command,
     organization_result_to_response,
     organization_results_to_response,
+    reactivate_organization_command,
     suspend_organization_command,
     update_organization_request_to_command,
 )
@@ -50,6 +52,7 @@ from app.modules.identity.application.organization.create_organization import Cr
 from app.modules.identity.application.organization.delete_organization import DeleteOrganizationUseCase
 from app.modules.identity.application.organization.get_organization import GetOrganizationUseCase
 from app.modules.identity.application.organization.list_organizations import ListOrganizationsUseCase
+from app.modules.identity.application.organization.reactivate_organization import ReactivateOrganizationUseCase
 from app.modules.identity.application.organization.suspend_organization import SuspendOrganizationUseCase
 from app.modules.identity.application.organization.update_organization import UpdateOrganizationUseCase
 from app.modules.identity.domain.authentication.value_objects.security.access_token import AccessTokenClaims
@@ -244,6 +247,42 @@ def suspend_organization(
             context=context,
             claims=claims,
             action="identity.organization.suspended",
+            new_values={"status": result.status.value},
+            audit_use_case=audit_use_case,
+        )
+    except OrganizationError as exc:
+        raise map_organization_error(exc) from exc
+
+    return organization_result_to_response(result)
+
+
+@router.post(
+    "/{organization_id}/reactivate",
+    response_model=OrganizationResponse,
+    responses={
+        400: {"model": ErrorResponse},
+        403: {"model": ErrorResponse},
+        404: {"model": ErrorResponse},
+        409: {"model": ErrorResponse},
+    },
+)
+def reactivate_organization(
+    organization_id: UUID,
+    context: AuthorizationContext = Depends(require_permission("identity.organizations.reactivate")),
+    claims: AccessTokenClaims = Depends(get_access_token_claims),
+    use_case: ReactivateOrganizationUseCase = Depends(get_reactivate_organization_use_case),
+    audit_use_case: RecordOrganizationAuditEventUseCase = Depends(
+        get_record_organization_audit_event_use_case
+    ),
+) -> OrganizationResponse:
+    assert_organization_scope(organization_id, context)
+    try:
+        result = use_case.execute(reactivate_organization_command(OrganizationId(organization_id)))
+        _record_lifecycle_audit(
+            organization_id=organization_id,
+            context=context,
+            claims=claims,
+            action="identity.organization.reactivated",
             new_values={"status": result.status.value},
             audit_use_case=audit_use_case,
         )
