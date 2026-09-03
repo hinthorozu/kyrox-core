@@ -7,10 +7,8 @@ def organization_allows_authentication(
     user: User,
     organization_repository: OrganizationRepository,
 ) -> bool:
-    if user.is_super_admin:
+    if user.is_super_admin or user.organization_id is None:
         return True
-    if user.organization_id is None:
-        return False
 
     organization = organization_repository.get_by_id(OrganizationId(user.organization_id))
     return organization is not None and organization.is_active()
