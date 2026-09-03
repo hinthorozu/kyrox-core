@@ -2,6 +2,9 @@ from datetime import datetime
 
 from app.modules.identity.application.authentication.client_context import parse_client_context
 from app.modules.identity.application.authentication.commands import RefreshSessionCommand
+from app.modules.identity.application.authentication.organization_lifecycle import (
+    organization_allows_authentication,
+)
 from app.modules.identity.application.authentication.results import AuthTokenPairResult
 from app.modules.identity.application.authentication.token_pair_issuer import TokenPairIssuer
 from app.modules.identity.domain.authentication.enums.refresh_token_revoke_reason import (
@@ -20,6 +23,7 @@ from app.modules.identity.domain.authentication.ports.refresh_token_service impo
 from app.modules.identity.domain.authentication.ports.session_repository import SessionRepository
 from app.modules.identity.domain.authentication.ports.user_repository import UserRepository
 from app.modules.identity.domain.authentication.value_objects.identity.session_id import SessionId
+from app.modules.identity.domain.organization.ports.organization_repository import OrganizationRepository
 
 
 class RefreshSessionUseCase:
@@ -31,6 +35,7 @@ class RefreshSessionUseCase:
         refresh_token_service: RefreshTokenService,
         token_pair_issuer: TokenPairIssuer,
         clock: Clock,
+        organization_repository: OrganizationRepository | None = None,
     ) -> None:
         self._user_repository = user_repository
         self._session_repository = session_repository
@@ -38,6 +43,7 @@ class RefreshSessionUseCase:
         self._refresh_token_service = refresh_token_service
         self._token_pair_issuer = token_pair_issuer
         self._clock = clock
+        self._organization_repository = organization_repository
 
     def execute(self, command: RefreshSessionCommand) -> AuthTokenPairResult:
         token_hash = self._refresh_token_service.hash(command.refresh_token)
@@ -73,6 +79,14 @@ class RefreshSessionUseCase:
             raise InvalidRefreshTokenError("Invalid refresh token")
 
         user.assert_can_authenticate()
+        if self._organization_repository is not None and not organization_allows_authentication(
+            user,
+            self._organization_repository,
+        ):
+            stored_token.revoke(now, RefreshTokenRevokeReason.ORGANIZATION_SUSPENDED)
+            self._refresh_token_repository.update(stored_token)
+            self._revoke_session_if_active(stored_token.session_id, now)
+            raise InvalidRefreshTokenError("Invalid refresh token")
 
         stored_token.mark_used(now)
         stored_token.revoke(now, RefreshTokenRevokeReason.ROTATED)

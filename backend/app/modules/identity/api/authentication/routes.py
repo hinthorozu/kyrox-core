@@ -7,13 +7,15 @@ from app.modules.identity.api.authentication.dependencies import (
     get_change_password_use_case,
     get_complete_activation_use_case,
     get_forgot_password_use_case,
-    get_login_use_case,
     get_logout_use_case,
     get_public_signup_use_case,
-    get_refresh_session_use_case,
     get_reset_password_use_case,
 )
 from app.modules.identity.api.authentication.error_mapping import map_authentication_error
+from app.modules.identity.api.authentication.lifecycle.dependencies import (
+    get_lifecycle_aware_login_use_case,
+    get_lifecycle_aware_refresh_session_use_case,
+)
 from app.modules.identity.api.authentication.mappers import (
     activation_request_to_command,
     change_password_request_to_command,
@@ -196,7 +198,7 @@ def change_password(
 def login(
     payload: LoginRequest,
     request: Request,
-    use_case: LoginUseCase = Depends(get_login_use_case),
+    use_case: LoginUseCase = Depends(get_lifecycle_aware_login_use_case),
 ) -> TokenResponse:
     try:
         result = use_case.execute(login_request_to_command(payload, request))
@@ -213,7 +215,7 @@ def login(
 )
 def refresh(
     payload: RefreshRequest,
-    use_case: RefreshSessionUseCase = Depends(get_refresh_session_use_case),
+    use_case: RefreshSessionUseCase = Depends(get_lifecycle_aware_refresh_session_use_case),
 ) -> TokenResponse:
     try:
         result = use_case.execute(refresh_request_to_command(payload))

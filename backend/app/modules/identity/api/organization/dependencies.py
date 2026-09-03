@@ -5,9 +5,14 @@ from app.db.session import get_db
 from app.modules.identity.api.authentication.dependencies import (
     get_clock,
     get_id_generator,
+    get_refresh_token_repository,
+    get_session_repository,
     get_user_repository,
 )
 from app.modules.identity.application.authentication.id_generator import IdGenerator
+from app.modules.identity.application.authentication.revoke_organization_sessions import (
+    RevokeOrganizationSessionsUseCase,
+)
 from app.modules.identity.application.organization.create_organization import CreateOrganizationUseCase
 from app.modules.identity.application.organization.delete_organization import DeleteOrganizationUseCase
 from app.modules.identity.application.organization.get_organization import GetOrganizationUseCase
@@ -16,6 +21,10 @@ from app.modules.identity.application.organization.reactivate_organization impor
 from app.modules.identity.application.organization.suspend_organization import SuspendOrganizationUseCase
 from app.modules.identity.application.organization.update_organization import UpdateOrganizationUseCase
 from app.modules.identity.domain.authentication.ports.clock import Clock
+from app.modules.identity.domain.authentication.ports.refresh_token_repository import (
+    RefreshTokenRepository,
+)
+from app.modules.identity.domain.authentication.ports.session_repository import SessionRepository
 from app.modules.identity.domain.authentication.ports.user_repository import UserRepository
 from app.modules.identity.domain.authorization.ports.role_repository import RoleRepository
 from app.modules.identity.domain.organization.ports.organization_repository import OrganizationRepository
@@ -98,10 +107,17 @@ def get_delete_organization_use_case(
 
 def get_suspend_organization_use_case(
     organization_repository: OrganizationRepository = Depends(get_organization_repository),
+    session_repository: SessionRepository = Depends(get_session_repository),
+    refresh_token_repository: RefreshTokenRepository = Depends(get_refresh_token_repository),
     clock: Clock = Depends(get_clock),
 ) -> SuspendOrganizationUseCase:
     return SuspendOrganizationUseCase(
         organization_repository=organization_repository,
+        revoke_organization_sessions=RevokeOrganizationSessionsUseCase(
+            session_repository=session_repository,
+            refresh_token_repository=refresh_token_repository,
+            clock=clock,
+        ),
         clock=clock,
     )
 
