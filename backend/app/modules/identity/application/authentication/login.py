@@ -1,6 +1,9 @@
 from app.modules.identity.application.authentication.client_context import parse_client_context
 from app.modules.identity.application.authentication.commands import LoginCommand
 from app.modules.identity.application.authentication.id_generator import IdGenerator
+from app.modules.identity.application.authentication.organization_lifecycle import (
+    organization_allows_authentication,
+)
 from app.modules.identity.application.authentication.results import AuthTokenPairResult
 from app.modules.identity.application.authentication.token_pair_issuer import TokenPairIssuer
 from app.modules.identity.domain.authentication.entities.session import Session
@@ -12,6 +15,7 @@ from app.modules.identity.domain.authentication.ports.user_repository import Use
 from app.modules.identity.domain.authentication.value_objects.identity.family_id import FamilyId
 from app.modules.identity.domain.authentication.value_objects.identity.session_id import SessionId
 from app.modules.identity.domain.authentication.value_objects.security.email import Email
+from app.modules.identity.domain.organization.ports.organization_repository import OrganizationRepository
 
 
 class LoginUseCase:
@@ -23,6 +27,7 @@ class LoginUseCase:
         token_pair_issuer: TokenPairIssuer,
         clock: Clock,
         id_generator: IdGenerator,
+        organization_repository: OrganizationRepository | None = None,
     ) -> None:
         self._user_repository = user_repository
         self._session_repository = session_repository
@@ -30,6 +35,7 @@ class LoginUseCase:
         self._token_pair_issuer = token_pair_issuer
         self._clock = clock
         self._id_generator = id_generator
+        self._organization_repository = organization_repository
 
     def execute(self, command: LoginCommand) -> AuthTokenPairResult:
         try:
@@ -42,6 +48,11 @@ class LoginUseCase:
             raise InvalidCredentialsError("Invalid email or password")
 
         user.assert_can_authenticate()
+        if self._organization_repository is not None and not organization_allows_authentication(
+            user,
+            self._organization_repository,
+        ):
+            raise InvalidCredentialsError("Invalid email or password")
 
         if not self._password_hasher.verify(command.password, user.password_hash):
             raise InvalidCredentialsError("Invalid email or password")
