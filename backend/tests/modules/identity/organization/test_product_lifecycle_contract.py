@@ -41,12 +41,16 @@ def test_product_lifecycle_snapshot_requires_dedicated_credential(
         db_session,
         permission_code="identity.organizations.read",
     )
+    path = f"/api/v1/organizations/{seed.org.id.value}/lifecycle-snapshot"
 
-    response = client.get(
-        f"/api/v1/organizations/{seed.org.id.value}/lifecycle-snapshot",
+    missing_response = client.get(path)
+    wrong_response = client.get(
+        path,
+        headers={"X-Kyrox-Product-Lifecycle-Token": "wrong-lifecycle-token"},
     )
 
-    assert response.status_code == 401
+    assert missing_response.status_code == 401
+    assert wrong_response.status_code == 401
 
 
 def test_product_lifecycle_snapshot_reports_active_and_suspended_state(
