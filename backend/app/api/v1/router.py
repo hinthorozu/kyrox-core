@@ -8,6 +8,9 @@ from app.modules.settings.api.routes import router as settings_router
 from app.modules.identity.api.authentication.routes import router as identity_auth_router
 from app.modules.identity.api.authorization.routes import router as identity_authorization_router
 from app.modules.identity.api.organization.routes import router as identity_organization_router
+from app.modules.identity.api.organization.product_lifecycle_routes import (
+    router as identity_product_lifecycle_router,
+)
 from app.modules.identity.api.user_management.deleted_users import router as identity_deleted_users_router
 from app.modules.identity.api.user_management.routes import router as identity_user_management_router
 from app.modules.identity.api.role_management.routes import router as identity_role_management_router
@@ -16,6 +19,7 @@ api_v1_router = APIRouter()
 api_v1_router.include_router(health.router, tags=["health"])
 api_v1_router.include_router(identity_auth_router)
 api_v1_router.include_router(identity_organization_router)
+api_v1_router.include_router(identity_product_lifecycle_router)
 api_v1_router.include_router(identity_deleted_users_router)
 api_v1_router.include_router(identity_user_management_router)
 api_v1_router.include_router(identity_role_management_router)

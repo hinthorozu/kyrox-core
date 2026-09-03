@@ -23,6 +23,11 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_DAYS: int = 15
     REFRESH_TOKEN_EXPIRE_DAYS: int = 15
 
+    # Purpose-separated read-only credential for product background workers to
+    # query canonical organization lifecycle eligibility. Never reuse user JWTs
+    # or provider credentials for this contract.
+    CORE_PRODUCT_LIFECYCLE_TOKEN: str = "dev-insecure-product-lifecycle-token-change-me"
+
     # Dedicated secret for reconstructable, hash-only persisted identity action
     # tokens used by asynchronous identity-email delivery.
     CORE_IDENTITY_ACTION_TOKEN_SECRET_KEY: str = (
