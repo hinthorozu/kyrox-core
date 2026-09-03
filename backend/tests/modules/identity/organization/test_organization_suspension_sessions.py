@@ -84,3 +84,15 @@ def test_suspend_revokes_target_organization_sessions_and_refresh_tokens(
         json={"refresh_token": refresh_token},
     )
     assert refresh_response.status_code == 401
+
+    relogin_response = client.post(
+        "/api/v1/auth/login",
+        json={"email": seed.user.email.value, "password": "Password123!"},
+    )
+    assert relogin_response.status_code == 401
+
+    super_admin_response = client.get(
+        "/api/v1/organizations",
+        headers={"Authorization": f"Bearer {super_admin_token}"},
+    )
+    assert super_admin_response.status_code == 200, super_admin_response.text
