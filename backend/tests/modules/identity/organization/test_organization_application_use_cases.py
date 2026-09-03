@@ -3,15 +3,25 @@ from datetime import UTC, datetime
 
 import pytest
 
-from app.modules.identity.application.organization.commands import CreateOrganizationCommand
+from app.modules.identity.application.organization.commands import (
+    CreateOrganizationCommand,
+    ReactivateOrganizationCommand,
+)
 from app.modules.identity.application.organization.create_organization import CreateOrganizationUseCase
+from app.modules.identity.application.organization.reactivate_organization import ReactivateOrganizationUseCase
 from app.modules.identity.domain.authentication.entities.user import User
 from app.modules.identity.domain.authentication.enums.user_status import UserStatus
 from app.modules.identity.domain.authentication.value_objects.identity.user_id import UserId
 from app.modules.identity.domain.authentication.value_objects.security.email import Email
 from app.modules.identity.domain.authentication.value_objects.security.password_hash import PasswordHash
+from app.modules.identity.domain.organization.entities.organization import Organization
 from app.modules.identity.domain.organization.enums.organization_status import OrganizationStatus
-from app.modules.identity.domain.organization.exceptions import DuplicateOrganizationSlugError
+from app.modules.identity.domain.organization.exceptions import (
+    DuplicateOrganizationSlugError,
+    OrganizationNotFoundError,
+)
+from app.modules.identity.domain.organization.value_objects.identity.organization_id import OrganizationId
+from app.modules.identity.domain.organization.value_objects.profile.organization_name import OrganizationName
 from app.modules.identity.domain.organization.value_objects.profile.organization_slug import OrganizationSlug
 
 from organization_application_test_helpers import (
@@ -94,3 +104,40 @@ def test_create_organization_rejects_duplicate_slug() -> None:
                 slug="acme-corp",
             )
         )
+
+
+def test_reactivate_organization_use_case_transitions_suspended_to_active() -> None:
+    now = _now()
+    organization_id = OrganizationId(uuid.uuid4())
+    organization = Organization(
+        id=organization_id,
+        name=OrganizationName.create("Acme"),
+        slug=OrganizationSlug.create("acme"),
+        status=OrganizationStatus.SUSPENDED,
+        created_at=now,
+        updated_at=now,
+    )
+    org_repo = InMemoryOrganizationRepository()
+    org_repo.add(organization)
+    use_case = ReactivateOrganizationUseCase(
+        organization_repository=org_repo,
+        clock=FixedClock(now),
+    )
+
+    result = use_case.execute(ReactivateOrganizationCommand(organization_id=organization_id))
+
+    assert result.status is OrganizationStatus.ACTIVE
+    persisted = org_repo.get_by_id(organization_id)
+    assert persisted is not None
+    assert persisted.status is OrganizationStatus.ACTIVE
+
+
+def test_reactivate_organization_use_case_rejects_missing_organization() -> None:
+    organization_id = OrganizationId(uuid.uuid4())
+    use_case = ReactivateOrganizationUseCase(
+        organization_repository=InMemoryOrganizationRepository(),
+        clock=FixedClock(_now()),
+    )
+
+    with pytest.raises(OrganizationNotFoundError):
+        use_case.execute(ReactivateOrganizationCommand(organization_id=organization_id))

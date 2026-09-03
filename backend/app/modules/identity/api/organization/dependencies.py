@@ -12,6 +12,7 @@ from app.modules.identity.application.organization.create_organization import Cr
 from app.modules.identity.application.organization.delete_organization import DeleteOrganizationUseCase
 from app.modules.identity.application.organization.get_organization import GetOrganizationUseCase
 from app.modules.identity.application.organization.list_organizations import ListOrganizationsUseCase
+from app.modules.identity.application.organization.reactivate_organization import ReactivateOrganizationUseCase
 from app.modules.identity.application.organization.suspend_organization import SuspendOrganizationUseCase
 from app.modules.identity.application.organization.update_organization import UpdateOrganizationUseCase
 from app.modules.identity.domain.authentication.ports.clock import Clock
@@ -100,6 +101,16 @@ def get_suspend_organization_use_case(
     clock: Clock = Depends(get_clock),
 ) -> SuspendOrganizationUseCase:
     return SuspendOrganizationUseCase(
+        organization_repository=organization_repository,
+        clock=clock,
+    )
+
+
+def get_reactivate_organization_use_case(
+    organization_repository: OrganizationRepository = Depends(get_organization_repository),
+    clock: Clock = Depends(get_clock),
+) -> ReactivateOrganizationUseCase:
+    return ReactivateOrganizationUseCase(
         organization_repository=organization_repository,
         clock=clock,
     )

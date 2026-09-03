@@ -16,6 +16,7 @@ APPLICATION_FILES = (
     "get_organization.py",
     "update_organization.py",
     "suspend_organization.py",
+    "reactivate_organization.py",
     "commands.py",
     "results.py",
     "policy.py",
