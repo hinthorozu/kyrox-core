@@ -51,6 +51,14 @@ def _add_organization(
     engine.dispose()
 
 
+def _as_utc(value: datetime | None) -> datetime | None:
+    if value is None:
+        return None
+    if value.tzinfo is None:
+        return value.replace(tzinfo=UTC)
+    return value.astimezone(UTC)
+
+
 def test_snapshot_round_trip_includes_soft_deleted_organizations(tmp_path: Path) -> None:
     database_url = _database_url(tmp_path)
     _create_schema(database_url)
@@ -150,12 +158,12 @@ def test_reconcile_reapplies_current_lifecycle_and_tombstones_old_only_rows(
         deleted_model = session.get(OrganizationModel, deleted_id)
         assert deleted_model is not None
         assert deleted_model.status == OrganizationStatus.ARCHIVED.value
-        assert deleted_model.deleted_at == deleted_at
+        assert _as_utc(deleted_model.deleted_at) == deleted_at
 
         resurrected = session.get(OrganizationModel, resurrected_old_id)
         assert resurrected is not None
         assert resurrected.status == OrganizationStatus.ARCHIVED.value
-        assert resurrected.deleted_at == captured_at
+        assert _as_utc(resurrected.deleted_at) == captured_at
     engine.dispose()
 
 
