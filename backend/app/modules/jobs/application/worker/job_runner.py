@@ -5,6 +5,13 @@ from app.modules.jobs.domain.ports import JobHandlerRegistry, JobHandlerResult
 from app.modules.jobs.domain.value_objects.failure_reason import FailureReason
 from app.modules.jobs.domain.value_objects.job_status import JobStatus
 
+# OL09-B suspension-security delivery must survive FAIR downtime and process
+# restarts. A bounded retry count would allow a valid Core SUSPENDED episode to
+# become permanently undispatched while FAIR still retained an old signing
+# secret, so this single security-critical job type never terminalizes merely
+# because its delivery-attempt count was exhausted.
+_PERSISTENT_RETRY_JOB_TYPES = frozenset({"core.identity.organization_suspended"})
+
 
 class JobRunner:
     def __init__(self, handler_registry: JobHandlerRegistry) -> None:
@@ -28,6 +35,7 @@ class JobRunner:
                 job,
                 FailureReason.create(str(exc), code="handler_error"),
                 retryable=True,
+                persistent_retry=job.job_type.value in _PERSISTENT_RETRY_JOB_TYPES,
             )
 
         if not isinstance(handler_result, JobHandlerResult):
@@ -56,8 +64,14 @@ def _mark_completed(job: Job, result) -> Job:
     return job
 
 
-def _apply_failure(job: Job, reason: FailureReason, *, retryable: bool) -> Job:
-    if not retryable or job.attempt_count >= job.max_attempts:
+def _apply_failure(
+    job: Job,
+    reason: FailureReason,
+    *,
+    retryable: bool,
+    persistent_retry: bool = False,
+) -> Job:
+    if not retryable or (job.attempt_count >= job.max_attempts and not persistent_retry):
         return _mark_terminal_failure(job, reason)
     if not job.status.can_transition_to(JobStatus.PENDING):
         return job
