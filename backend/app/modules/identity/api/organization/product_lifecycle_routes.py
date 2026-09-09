@@ -20,6 +20,7 @@ class ProductOrganizationLifecycleSnapshot(BaseModel):
     work_allowed: bool
     is_deleted: bool
     deleted_at: datetime | None
+    updated_at: datetime
 
 
 def require_product_lifecycle_credential(
@@ -55,4 +56,5 @@ def get_product_organization_lifecycle_snapshot(
         work_allowed=organization.is_active(),
         is_deleted=organization.is_deleted(),
         deleted_at=organization.deleted_at,
+        updated_at=organization.updated_at,
     )
