@@ -1,10 +1,13 @@
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
+from uuid import uuid4
 
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
+from app.modules.identity.infrastructure.organization.persistence.models.organization import OrganizationModel
 from app.modules.identity.infrastructure.persistence.models import UserModel
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -71,6 +74,8 @@ def test_product_lifecycle_snapshot_reports_active_and_suspended_state(
         "organization_id": str(seed.org.id.value),
         "status": "active",
         "work_allowed": True,
+        "is_deleted": False,
+        "deleted_at": None,
     }
 
     super_admin_token = _login_super_admin(client, db_session)
@@ -92,4 +97,39 @@ def test_product_lifecycle_snapshot_reports_active_and_suspended_state(
         "organization_id": str(seed.org.id.value),
         "status": "suspended",
         "work_allowed": False,
+        "is_deleted": False,
+        "deleted_at": None,
     }
+
+
+def test_product_lifecycle_snapshot_distinguishes_soft_deleted_from_unknown(
+    client: TestClient,
+    db_session: Session,
+) -> None:
+    seed = seed_user_with_org_permission(
+        db_session,
+        permission_code="identity.organizations.read",
+    )
+    deleted_at = datetime.now(timezone.utc)
+    organization_model = db_session.get(OrganizationModel, seed.org.id.value)
+    assert organization_model is not None
+    organization_model.deleted_at = deleted_at
+    db_session.commit()
+
+    deleted_response = client.get(
+        f"/api/v1/organizations/{seed.org.id.value}/lifecycle-snapshot",
+        headers=_lifecycle_headers(),
+    )
+    assert deleted_response.status_code == 200, deleted_response.text
+    deleted_snapshot = deleted_response.json()
+    assert deleted_snapshot["organization_id"] == str(seed.org.id.value)
+    assert deleted_snapshot["status"] == "active"
+    assert deleted_snapshot["work_allowed"] is False
+    assert deleted_snapshot["is_deleted"] is True
+    assert deleted_snapshot["deleted_at"] is not None
+
+    unknown_response = client.get(
+        f"/api/v1/organizations/{uuid4()}/lifecycle-snapshot",
+        headers=_lifecycle_headers(),
+    )
+    assert unknown_response.status_code == 404
