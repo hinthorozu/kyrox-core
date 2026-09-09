@@ -36,6 +36,12 @@ def _lifecycle_headers() -> dict[str, str]:
     return {"X-Kyrox-Product-Lifecycle-Token": settings.CORE_PRODUCT_LIFECYCLE_TOKEN}
 
 
+def _pop_updated_at(snapshot: dict[str, object]) -> datetime:
+    raw = snapshot.pop("updated_at")
+    assert isinstance(raw, str)
+    return datetime.fromisoformat(raw.replace("Z", "+00:00"))
+
+
 def test_product_lifecycle_snapshot_requires_dedicated_credential(
     client: TestClient,
     db_session: Session,
@@ -70,7 +76,9 @@ def test_product_lifecycle_snapshot_reports_active_and_suspended_state(
         headers=_lifecycle_headers(),
     )
     assert active_response.status_code == 200, active_response.text
-    assert active_response.json() == {
+    active_snapshot = active_response.json()
+    active_updated_at = _pop_updated_at(active_snapshot)
+    assert active_snapshot == {
         "organization_id": str(seed.org.id.value),
         "status": "active",
         "work_allowed": True,
@@ -93,13 +101,16 @@ def test_product_lifecycle_snapshot_reports_active_and_suspended_state(
         headers=_lifecycle_headers(),
     )
     assert suspended_response.status_code == 200, suspended_response.text
-    assert suspended_response.json() == {
+    suspended_snapshot = suspended_response.json()
+    suspended_updated_at = _pop_updated_at(suspended_snapshot)
+    assert suspended_snapshot == {
         "organization_id": str(seed.org.id.value),
         "status": "suspended",
         "work_allowed": False,
         "is_deleted": False,
         "deleted_at": None,
     }
+    assert suspended_updated_at >= active_updated_at
 
 
 def test_product_lifecycle_snapshot_distinguishes_soft_deleted_from_unknown(
@@ -122,6 +133,7 @@ def test_product_lifecycle_snapshot_distinguishes_soft_deleted_from_unknown(
     )
     assert deleted_response.status_code == 200, deleted_response.text
     deleted_snapshot = deleted_response.json()
+    _pop_updated_at(deleted_snapshot)
     assert deleted_snapshot["organization_id"] == str(seed.org.id.value)
     assert deleted_snapshot["status"] == "active"
     assert deleted_snapshot["work_allowed"] is False
