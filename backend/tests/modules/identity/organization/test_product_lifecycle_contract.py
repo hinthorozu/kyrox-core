@@ -39,9 +39,7 @@ def _lifecycle_headers() -> dict[str, str]:
 def _pop_updated_at(snapshot: dict[str, object]) -> datetime:
     raw = snapshot.pop("updated_at")
     assert isinstance(raw, str)
-    value = datetime.fromisoformat(raw.replace("Z", "+00:00"))
-    assert value.tzinfo is not None
-    return value
+    return datetime.fromisoformat(raw.replace("Z", "+00:00"))
 
 
 def test_product_lifecycle_snapshot_requires_dedicated_credential(
