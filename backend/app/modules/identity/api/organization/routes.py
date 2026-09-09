@@ -60,6 +60,9 @@ from app.modules.identity.domain.authentication.value_objects.identity.user_id i
 from app.modules.identity.domain.authorization.ports.platform_user_reader import PlatformUserReader
 from app.modules.identity.domain.organization.exceptions import OrganizationError
 from app.modules.identity.domain.organization.value_objects.identity.organization_id import OrganizationId
+from app.modules.jobs.api.dependencies import get_enqueue_job_use_case
+from app.modules.jobs.application.commands import EnqueueJobCommand
+from app.modules.jobs.application.enqueue_job import EnqueueJobUseCase
 
 router = APIRouter(prefix="/organizations", tags=["organizations"])
 
@@ -238,6 +241,7 @@ def suspend_organization(
     audit_use_case: RecordOrganizationAuditEventUseCase = Depends(
         get_record_organization_audit_event_use_case
     ),
+    enqueue_job_use_case: EnqueueJobUseCase = Depends(get_enqueue_job_use_case),
 ) -> OrganizationResponse:
     assert_organization_scope(organization_id, context)
     try:
@@ -249,6 +253,22 @@ def suspend_organization(
             action="identity.organization.suspended",
             new_values={"status": result.status.value},
             audit_use_case=audit_use_case,
+        )
+        lifecycle_episode = result.updated_at.isoformat()
+        episode_key = result.updated_at.strftime("%Y%m%dT%H%M%S%f")
+        enqueue_job_use_case.execute(
+            EnqueueJobCommand(
+                organization_id=organization_id,
+                job_type="core.identity.organization_suspended",
+                payload={
+                    "organization_id": str(organization_id),
+                    "lifecycle_updated_at": lifecycle_episode,
+                },
+                idempotency_key=(
+                    f"organization-suspended-{organization_id.hex}-{episode_key}"
+                ),
+                max_attempts=10,
+            )
         )
     except OrganizationError as exc:
         raise map_organization_error(exc) from exc
