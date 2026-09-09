@@ -60,6 +60,12 @@ class SqlAlchemyOrganizationRepository:
             return None
         return OrganizationMapper.to_domain(model)
 
+    def get_by_id_including_deleted(self, organization_id: OrganizationId) -> Organization | None:
+        model = self._session.get(OrganizationModel, organization_id.value)
+        if model is None:
+            return None
+        return OrganizationMapper.to_domain(model)
+
     def get_by_slug(self, slug: OrganizationSlug) -> Organization | None:
         stmt = select(OrganizationModel).where(
             OrganizationModel.slug == slug.value,
