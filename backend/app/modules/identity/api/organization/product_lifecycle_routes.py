@@ -1,3 +1,4 @@
+from datetime import datetime
 from secrets import compare_digest
 from uuid import UUID
 
@@ -17,6 +18,8 @@ class ProductOrganizationLifecycleSnapshot(BaseModel):
     organization_id: UUID
     status: OrganizationStatus
     work_allowed: bool
+    is_deleted: bool
+    deleted_at: datetime | None
 
 
 def require_product_lifecycle_credential(
@@ -42,12 +45,14 @@ def get_product_organization_lifecycle_snapshot(
     organization_id: UUID,
     repository: OrganizationRepository = Depends(get_organization_repository),
 ) -> ProductOrganizationLifecycleSnapshot:
-    organization = repository.get_by_id(OrganizationId(organization_id))
+    organization = repository.get_by_id_including_deleted(OrganizationId(organization_id))
     if organization is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Organization not found")
 
     return ProductOrganizationLifecycleSnapshot(
         organization_id=organization_id,
         status=organization.status,
-        work_allowed=organization.status is OrganizationStatus.ACTIVE,
+        work_allowed=organization.is_active(),
+        is_deleted=organization.is_deleted(),
+        deleted_at=organization.deleted_at,
     )
