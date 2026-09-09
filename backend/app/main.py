@@ -1,4 +1,6 @@
-from contextlib import asynccontextmanager
+import asyncio
+import logging
+from contextlib import asynccontextmanager, suppress
 
 from fastapi import FastAPI
 
@@ -6,31 +8,51 @@ from app.api.v1.router import api_v1_router
 from app.core.config import settings
 from app.core.exceptions import register_exception_handlers
 from app.core.logging import setup_logging
+from app.db.session import SessionLocal
 from app.modules.jobs.application.commands import ProcessPendingJobsCommand
 from app.modules.jobs.application.policy import JobPolicy
 from app.modules.jobs.application.process_pending_jobs import ProcessPendingJobsUseCase
 from app.modules.jobs.bootstrap import build_job_handler_registry
-from app.modules.notifications.bootstrap import register_notification_platform
 from app.modules.jobs.infrastructure.repositories import SqlAlchemyJobRepository
-from app.db.session import SessionLocal
+from app.modules.notifications.bootstrap import register_notification_platform
+
+logger = logging.getLogger(__name__)
+
+
+def _process_pending_job_batch(app: FastAPI) -> None:
+    db = SessionLocal()
+    try:
+        policy = JobPolicy()
+        use_case = ProcessPendingJobsUseCase(
+            job_repository=SqlAlchemyJobRepository(db),
+            handler_registry=app.state.job_handler_registry,
+            job_policy=policy,
+        )
+        use_case.execute(ProcessPendingJobsCommand(limit=policy.default_batch_size))
+        db.commit()
+    except Exception:
+        db.rollback()
+        logger.exception("Core pending-job batch failed")
+    finally:
+        db.close()
+
+
+async def _job_dispatch_loop(app: FastAPI) -> None:
+    while True:
+        await asyncio.to_thread(_process_pending_job_batch, app)
+        await asyncio.sleep(settings.CORE_JOB_DISPATCH_INTERVAL_SECONDS)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    db = SessionLocal()
+    await asyncio.to_thread(_process_pending_job_batch, app)
+    dispatcher = asyncio.create_task(_job_dispatch_loop(app))
     try:
-        use_case = ProcessPendingJobsUseCase(
-            job_repository=SqlAlchemyJobRepository(db),
-            handler_registry=app.state.job_handler_registry,
-            job_policy=JobPolicy(),
-        )
-        use_case.execute(ProcessPendingJobsCommand(limit=JobPolicy().default_batch_size))
-        db.commit()
-    except Exception:
-        db.rollback()
+        yield
     finally:
-        db.close()
-    yield
+        dispatcher.cancel()
+        with suppress(asyncio.CancelledError):
+            await dispatcher
 
 
 def create_app() -> FastAPI:

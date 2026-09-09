@@ -28,6 +28,13 @@ class Settings(BaseSettings):
     # or provider credentials for this contract.
     CORE_PRODUCT_LIFECYCLE_TOKEN: str = "dev-insecure-product-lifecycle-token-change-me"
 
+    # OL09-B purpose-separated Core -> FAIR CRM suspension-security delivery.
+    # No default secret is accepted: deployments must explicitly configure the
+    # same value on Core and FAIR CRM.
+    FAIR_CRM_BASE_URL: str = "http://localhost:8001"
+    FAIR_CRM_CORE_LIFECYCLE_SIGNAL_TOKEN: str | None = None
+    CORE_JOB_DISPATCH_INTERVAL_SECONDS: float = 5.0
+
     # Dedicated secret for reconstructable, hash-only persisted identity action
     # tokens used by asynchronous identity-email delivery.
     CORE_IDENTITY_ACTION_TOKEN_SECRET_KEY: str = (

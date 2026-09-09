@@ -1,3 +1,4 @@
+import re
 import sys
 from pathlib import Path
 
@@ -10,6 +11,7 @@ from app.modules.identity.infrastructure.authentication.persistence.models.refre
 )
 from app.modules.identity.infrastructure.authentication.persistence.models.session import SessionModel
 from app.modules.identity.infrastructure.persistence.models import UserModel
+from app.modules.jobs.infrastructure.persistence.models import PlatformJobModel
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from identity_api_test_helpers import seed_authenticated_user, seed_user_with_org_permission
@@ -54,6 +56,18 @@ def test_suspend_revokes_target_organization_sessions_and_refresh_tokens(
         },
     )
     assert response.status_code == 200, response.text
+
+    signal_job = db_session.scalars(
+        select(PlatformJobModel).where(
+            PlatformJobModel.organization_id == seed.org.id.value,
+            PlatformJobModel.job_type == "core.identity.organization_suspended",
+        )
+    ).one()
+    assert signal_job.payload["organization_id"] == str(seed.org.id.value)
+    assert signal_job.payload["lifecycle_updated_at"] == response.json()["updated_at"]
+    assert signal_job.max_attempts == 10
+    assert signal_job.idempotency_key is not None
+    assert re.fullmatch(r"[A-Za-z0-9_-]+", signal_job.idempotency_key)
 
     sessions = db_session.scalars(
         select(SessionModel).where(SessionModel.user_id == seed.user.id.value)
