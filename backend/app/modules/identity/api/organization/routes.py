@@ -94,26 +94,42 @@ def _record_lifecycle_audit(
     "",
     response_model=CreateOrganizationResponse,
     status_code=status.HTTP_201_CREATED,
-    responses={403: {"model": ErrorResponse}, 409: {"model": ErrorResponse}, 422: {"model": ErrorResponse}, 503: {"model": ErrorResponse}},
+    responses={
+        403: {"model": ErrorResponse},
+        409: {"model": ErrorResponse},
+        422: {"model": ErrorResponse},
+        503: {"model": ErrorResponse},
+    },
 )
 def create_organization(
     payload: CreateOrganizationRequest,
     claims: AccessTokenClaims = Depends(require_super_admin),
     use_case: CreateOrganizationUseCase = Depends(get_create_organization_use_case),
 ) -> CreateOrganizationResponse:
+    # Platform organization creation is Super Admin only and does not depend
+    # on any permission row or organization membership.
     try:
-        result = use_case.execute(create_organization_request_to_command(payload, UserId(claims.sub.value)))
+        result = use_case.execute(
+            create_organization_request_to_command(payload, UserId(claims.sub.value))
+        )
     except Exception as exc:
         raise map_create_organization_error(exc) from exc
+
     return create_organization_result_to_response(result)
 
 
-@router.get("", response_model=list[OrganizationResponse], responses={401: {"model": ErrorResponse}})
+@router.get(
+    "",
+    response_model=list[OrganizationResponse],
+    responses={401: {"model": ErrorResponse}},
+)
 def list_organizations(
     claims: AccessTokenClaims = Depends(get_access_token_claims),
     platform_user_reader: PlatformUserReader = Depends(get_platform_user_reader),
     use_case: ListOrganizationsUseCase = Depends(get_list_organizations_use_case),
 ) -> list[OrganizationResponse]:
+    # Super Admin sees every non-deleted organization. Other users see only
+    # organizations where they have an effective membership.
     results = use_case.execute(
         list_organizations_command(
             UserId(claims.sub.value),
@@ -126,7 +142,11 @@ def list_organizations(
 @router.get(
     "/{organization_id}",
     response_model=OrganizationResponse,
-    responses={400: {"model": ErrorResponse}, 403: {"model": ErrorResponse}, 404: {"model": ErrorResponse}},
+    responses={
+        400: {"model": ErrorResponse},
+        403: {"model": ErrorResponse},
+        404: {"model": ErrorResponse},
+    },
 )
 def get_organization(
     organization_id: UUID,
@@ -138,13 +158,19 @@ def get_organization(
         result = use_case.execute(get_organization_command(OrganizationId(organization_id)))
     except OrganizationError as exc:
         raise map_organization_error(exc) from exc
+
     return organization_result_to_response(result)
 
 
 @router.patch(
     "/{organization_id}",
     response_model=OrganizationResponse,
-    responses={400: {"model": ErrorResponse}, 403: {"model": ErrorResponse}, 404: {"model": ErrorResponse}, 409: {"model": ErrorResponse}},
+    responses={
+        400: {"model": ErrorResponse},
+        403: {"model": ErrorResponse},
+        404: {"model": ErrorResponse},
+        409: {"model": ErrorResponse},
+    },
 )
 def update_organization(
     organization_id: UUID,
@@ -154,23 +180,32 @@ def update_organization(
 ) -> OrganizationResponse:
     assert_organization_scope(organization_id, context)
     try:
-        result = use_case.execute(update_organization_request_to_command(OrganizationId(organization_id), payload))
+        result = use_case.execute(
+            update_organization_request_to_command(OrganizationId(organization_id), payload)
+        )
     except OrganizationError as exc:
         raise map_organization_error(exc) from exc
+
     return organization_result_to_response(result)
 
 
 @router.delete(
     "/{organization_id}",
     status_code=status.HTTP_204_NO_CONTENT,
-    responses={400: {"model": ErrorResponse}, 403: {"model": ErrorResponse}, 404: {"model": ErrorResponse}},
+    responses={
+        400: {"model": ErrorResponse},
+        403: {"model": ErrorResponse},
+        404: {"model": ErrorResponse},
+    },
 )
 def delete_organization(
     organization_id: UUID,
     context: AuthorizationContext = Depends(require_permission("identity.organizations.delete")),
     claims: AccessTokenClaims = Depends(get_access_token_claims),
     use_case: DeleteOrganizationUseCase = Depends(get_delete_organization_use_case),
-    audit_use_case: RecordOrganizationAuditEventUseCase = Depends(get_record_organization_audit_event_use_case),
+    audit_use_case: RecordOrganizationAuditEventUseCase = Depends(
+        get_record_organization_audit_event_use_case
+    ),
 ) -> Response:
     assert_organization_scope(organization_id, context)
     try:
@@ -191,14 +226,21 @@ def delete_organization(
 @router.post(
     "/{organization_id}/suspend",
     response_model=OrganizationResponse,
-    responses={400: {"model": ErrorResponse}, 403: {"model": ErrorResponse}, 404: {"model": ErrorResponse}, 409: {"model": ErrorResponse}},
+    responses={
+        400: {"model": ErrorResponse},
+        403: {"model": ErrorResponse},
+        404: {"model": ErrorResponse},
+        409: {"model": ErrorResponse},
+    },
 )
 def suspend_organization(
     organization_id: UUID,
     context: AuthorizationContext = Depends(require_permission("identity.organizations.suspend")),
     claims: AccessTokenClaims = Depends(get_access_token_claims),
     use_case: SuspendOrganizationUseCase = Depends(get_suspend_organization_use_case),
-    audit_use_case: RecordOrganizationAuditEventUseCase = Depends(get_record_organization_audit_event_use_case),
+    audit_use_case: RecordOrganizationAuditEventUseCase = Depends(
+        get_record_organization_audit_event_use_case
+    ),
     enqueue_job_use_case: EnqueueJobUseCase = Depends(get_enqueue_job_use_case),
 ) -> OrganizationResponse:
     assert_organization_scope(organization_id, context)
@@ -212,35 +254,43 @@ def suspend_organization(
             new_values={"status": result.status.value},
             audit_use_case=audit_use_case,
         )
-        episode = result.updated_at.isoformat()
+        lifecycle_episode = result.updated_at.isoformat()
         enqueue_job_use_case.execute(
             EnqueueJobCommand(
                 organization_id=organization_id,
                 job_type="core.identity.organization_suspended",
                 payload={
                     "organization_id": str(organization_id),
-                    "lifecycle_updated_at": episode,
+                    "lifecycle_updated_at": lifecycle_episode,
                 },
-                idempotency_key=f"organization-suspended:{episode}",
+                idempotency_key=f"organization-suspended:{lifecycle_episode}",
                 max_attempts=20,
             )
         )
     except OrganizationError as exc:
         raise map_organization_error(exc) from exc
+
     return organization_result_to_response(result)
 
 
 @router.post(
     "/{organization_id}/reactivate",
     response_model=OrganizationResponse,
-    responses={400: {"model": ErrorResponse}, 403: {"model": ErrorResponse}, 404: {"model": ErrorResponse}, 409: {"model": ErrorResponse}},
+    responses={
+        400: {"model": ErrorResponse},
+        403: {"model": ErrorResponse},
+        404: {"model": ErrorResponse},
+        409: {"model": ErrorResponse},
+    },
 )
 def reactivate_organization(
     organization_id: UUID,
     context: AuthorizationContext = Depends(require_permission("identity.organizations.reactivate")),
     claims: AccessTokenClaims = Depends(get_access_token_claims),
     use_case: ReactivateOrganizationUseCase = Depends(get_reactivate_organization_use_case),
-    audit_use_case: RecordOrganizationAuditEventUseCase = Depends(get_record_organization_audit_event_use_case),
+    audit_use_case: RecordOrganizationAuditEventUseCase = Depends(
+        get_record_organization_audit_event_use_case
+    ),
 ) -> OrganizationResponse:
     assert_organization_scope(organization_id, context)
     try:
@@ -255,4 +305,5 @@ def reactivate_organization(
         )
     except OrganizationError as exc:
         raise map_organization_error(exc) from exc
+
     return organization_result_to_response(result)
