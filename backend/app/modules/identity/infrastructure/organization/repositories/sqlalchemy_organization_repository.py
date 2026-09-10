@@ -62,7 +62,13 @@ class SqlAlchemyOrganizationRepository:
                 OrganizationModel.status == OrganizationStatus.SUSPENDED.value,
                 OrganizationModel.updated_at == expected_updated_at,
             )
-            .values(deleted_at=self._clock.now())
+            .values(
+                deleted_at=self._clock.now(),
+                # `updated_at` identifies the exact suspension episode. BaseModelMixin
+                # has an on-update clock, so preserve this value explicitly while
+                # writing the terminal tombstone instead of creating a new episode.
+                updated_at=expected_updated_at,
+            )
         )
         result = self._session.execute(stmt)
         self._session.flush()
