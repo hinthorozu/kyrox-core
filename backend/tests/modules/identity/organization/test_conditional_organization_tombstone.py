@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import sys
 import uuid
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
@@ -9,6 +11,7 @@ from sqlalchemy.orm import Session
 from app.modules.identity.infrastructure.organization.persistence.models.organization import OrganizationModel
 from app.modules.identity.infrastructure.persistence.models import UserModel
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from identity_api_test_helpers import login, seed_authenticated_user
 
 
