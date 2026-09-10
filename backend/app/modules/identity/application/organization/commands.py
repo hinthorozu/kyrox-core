@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from datetime import datetime
 
 from app.modules.identity.domain.authentication.value_objects.identity.user_id import UserId
 from app.modules.identity.domain.organization.value_objects.identity.organization_id import OrganizationId
@@ -31,6 +32,7 @@ class UpdateOrganizationCommand:
 @dataclass(frozen=True, slots=True)
 class DeleteOrganizationCommand:
     organization_id: OrganizationId
+    expected_suspension_updated_at: datetime | None = None
 
 
 @dataclass(frozen=True, slots=True)
