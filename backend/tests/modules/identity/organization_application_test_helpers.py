@@ -9,6 +9,7 @@ from app.modules.identity.domain.authorization.enums.role_scope import RoleScope
 from app.modules.identity.domain.authorization.value_objects.identity.role_id import RoleId
 from app.modules.identity.domain.authorization.value_objects.rbac.role_slug import RoleSlug
 from app.modules.identity.domain.organization.entities.organization import Organization
+from app.modules.identity.domain.organization.enums.organization_status import OrganizationStatus
 from app.modules.identity.domain.organization.value_objects.identity.organization_id import OrganizationId
 from app.modules.identity.domain.organization.value_objects.profile.organization_slug import OrganizationSlug
 
@@ -81,6 +82,21 @@ class InMemoryOrganizationRepository:
         if organization is not None:
             self._slugs.discard(organization.slug.value)
             self.items = [item for item in self.items if item.id.value != organization_id.value]
+
+    def remove_if_suspended_episode(
+        self,
+        organization_id: OrganizationId,
+        expected_updated_at: datetime,
+    ) -> bool:
+        organization = self._by_id.get(organization_id.value)
+        if (
+            organization is None
+            or organization.status is not OrganizationStatus.SUSPENDED
+            or organization.updated_at != expected_updated_at
+        ):
+            return False
+        self.remove(organization_id)
+        return True
 
     def get_by_id(self, organization_id: OrganizationId) -> Organization | None:
         return self._by_id.get(organization_id.value)

@@ -1,6 +1,7 @@
+from datetime import datetime
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Response, status
+from fastapi import APIRouter, Depends, Header, Response, status
 
 from app.modules.audit.api.dependencies import get_record_organization_audit_event_use_case
 from app.modules.audit.application.record_organization_audit_event import (
@@ -196,10 +197,15 @@ def update_organization(
         400: {"model": ErrorResponse},
         403: {"model": ErrorResponse},
         404: {"model": ErrorResponse},
+        409: {"model": ErrorResponse},
     },
 )
 def delete_organization(
     organization_id: UUID,
+    expected_suspension_updated_at: datetime | None = Header(
+        default=None,
+        alias="X-Kyrox-Expected-Suspension-Updated-At",
+    ),
     context: AuthorizationContext = Depends(require_permission("identity.organizations.delete")),
     claims: AccessTokenClaims = Depends(get_access_token_claims),
     use_case: DeleteOrganizationUseCase = Depends(get_delete_organization_use_case),
@@ -209,7 +215,12 @@ def delete_organization(
 ) -> Response:
     assert_organization_scope(organization_id, context)
     try:
-        use_case.execute(delete_organization_command(OrganizationId(organization_id)))
+        use_case.execute(
+            delete_organization_command(
+                OrganizationId(organization_id),
+                expected_suspension_updated_at,
+            )
+        )
         _record_lifecycle_audit(
             organization_id=organization_id,
             context=context,

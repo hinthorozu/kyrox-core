@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from app.modules.identity.api.organization.schemas import (
     CreateOrganizationRequest,
     CreateOrganizationResponse,
@@ -54,8 +56,14 @@ def update_organization_request_to_command(
     )
 
 
-def delete_organization_command(organization_id: OrganizationId) -> DeleteOrganizationCommand:
-    return DeleteOrganizationCommand(organization_id=organization_id)
+def delete_organization_command(
+    organization_id: OrganizationId,
+    expected_suspension_updated_at: datetime | None = None,
+) -> DeleteOrganizationCommand:
+    return DeleteOrganizationCommand(
+        organization_id=organization_id,
+        expected_suspension_updated_at=expected_suspension_updated_at,
+    )
 
 
 def suspend_organization_command(organization_id: OrganizationId) -> SuspendOrganizationCommand:

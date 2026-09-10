@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import Protocol
 
 from app.modules.identity.domain.organization.entities.organization import Organization
@@ -11,6 +12,12 @@ class OrganizationRepository(Protocol):
     def update(self, organization: Organization) -> Organization: ...
 
     def remove(self, organization_id: OrganizationId) -> None: ...
+
+    def remove_if_suspended_episode(
+        self,
+        organization_id: OrganizationId,
+        expected_updated_at: datetime,
+    ) -> bool: ...
 
     def list_all(self) -> list[Organization]: ...
 

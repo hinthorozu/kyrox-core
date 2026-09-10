@@ -1,8 +1,11 @@
-from sqlalchemy import exists, select
+from datetime import datetime
+
+from sqlalchemy import exists, select, update
 from sqlalchemy.orm import Session as DbSession
 
 from app.modules.identity.domain.authentication.ports.clock import Clock
 from app.modules.identity.domain.organization.entities.organization import Organization
+from app.modules.identity.domain.organization.enums.organization_status import OrganizationStatus
 from app.modules.identity.domain.organization.value_objects.identity.organization_id import OrganizationId
 from app.modules.identity.domain.organization.value_objects.profile.organization_slug import OrganizationSlug
 from app.modules.identity.infrastructure.organization.persistence.mappers.organization_mapper import (
@@ -45,6 +48,31 @@ class SqlAlchemyOrganizationRepository:
 
         model.deleted_at = self._clock.now()
         self._session.flush()
+
+    def remove_if_suspended_episode(
+        self,
+        organization_id: OrganizationId,
+        expected_updated_at: datetime,
+    ) -> bool:
+        stmt = (
+            update(OrganizationModel)
+            .where(
+                OrganizationModel.id == organization_id.value,
+                OrganizationModel.deleted_at.is_(None),
+                OrganizationModel.status == OrganizationStatus.SUSPENDED.value,
+                OrganizationModel.updated_at == expected_updated_at,
+            )
+            .values(
+                deleted_at=self._clock.now(),
+                # `updated_at` identifies the exact suspension episode. BaseModelMixin
+                # has an on-update clock, so preserve this value explicitly while
+                # writing the terminal tombstone instead of creating a new episode.
+                updated_at=expected_updated_at,
+            )
+        )
+        result = self._session.execute(stmt)
+        self._session.flush()
+        return result.rowcount == 1
 
     def list_all(self) -> list[Organization]:
         stmt = (

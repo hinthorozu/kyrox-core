@@ -1,5 +1,10 @@
+from datetime import UTC
+
 from app.modules.identity.application.organization.commands import DeleteOrganizationCommand
-from app.modules.identity.domain.organization.exceptions import OrganizationNotFoundError
+from app.modules.identity.domain.organization.exceptions import (
+    InactiveOrganizationError,
+    OrganizationNotFoundError,
+)
 from app.modules.identity.domain.organization.ports.organization_repository import OrganizationRepository
 
 
@@ -11,4 +16,22 @@ class DeleteOrganizationUseCase:
         organization = self._organization_repository.get_by_id(command.organization_id)
         if organization is None:
             raise OrganizationNotFoundError("Organization not found")
-        self._organization_repository.remove(command.organization_id)
+
+        expected_updated_at = command.expected_suspension_updated_at
+        if expected_updated_at is None:
+            self._organization_repository.remove(command.organization_id)
+            return
+
+        if expected_updated_at.tzinfo is None or expected_updated_at.utcoffset() is None:
+            raise InactiveOrganizationError(
+                "Conditional organization tombstone requires a timezone-aware suspension episode"
+            )
+
+        removed = self._organization_repository.remove_if_suspended_episode(
+            command.organization_id,
+            expected_updated_at.astimezone(UTC),
+        )
+        if not removed:
+            raise InactiveOrganizationError(
+                "Organization is not in the expected suspended lifecycle episode"
+            )
