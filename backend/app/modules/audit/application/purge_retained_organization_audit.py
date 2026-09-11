@@ -8,6 +8,7 @@ from app.modules.audit.domain.exceptions import (
     AuditRetentionPreconditionError,
 )
 from app.modules.audit.domain.ports import AuditLogRepository
+from app.modules.audit.domain.retention_policy import AUDIT_RETENTION_POLICY_VERSION
 from app.modules.identity.domain.authentication.ports.clock import Clock
 from app.modules.identity.domain.organization.ports.organization_repository import OrganizationRepository
 from app.modules.identity.domain.organization.value_objects.identity.organization_id import OrganizationId
@@ -18,9 +19,11 @@ AUDIT_RETENTION_MONTHS = 12
 @dataclass(frozen=True, slots=True)
 class PurgeRetainedOrganizationAuditResult:
     organization_id: UUID
+    policy_version: str
     terminal_deleted_at: datetime
     retention_deadline: datetime
     purged_count: int
+    already_purged_verified: bool
 
 
 def add_calendar_months(value: datetime, months: int) -> datetime:
@@ -49,7 +52,18 @@ class PurgeRetainedOrganizationAuditUseCase:
         self._organization_repository = organization_repository
         self._clock = clock
 
-    def execute(self, organization_id: UUID) -> PurgeRetainedOrganizationAuditResult:
+    def execute(
+        self,
+        organization_id: UUID,
+        *,
+        expected_policy_version: str | None,
+        require_already_purged: bool = False,
+    ) -> PurgeRetainedOrganizationAuditResult:
+        if expected_policy_version != AUDIT_RETENTION_POLICY_VERSION:
+            raise AuditRetentionPreconditionError(
+                "Audit retention policy version mismatch"
+            )
+
         organization = self._organization_repository.get_by_id_including_deleted(
             OrganizationId(organization_id)
         )
@@ -73,10 +87,20 @@ class PurgeRetainedOrganizationAuditUseCase:
                 "Audit retention deadline has not been reached"
             )
 
-        purged_count = self._audit_log_repository.purge_for_organization(organization_id)
+        if require_already_purged:
+            if self._audit_log_repository.count_for_organization(organization_id) != 0:
+                raise AuditRetentionPreconditionError(
+                    "Retained audit evidence is not already purged"
+                )
+            purged_count = 0
+        else:
+            purged_count = self._audit_log_repository.purge_for_organization(organization_id)
+
         return PurgeRetainedOrganizationAuditResult(
             organization_id=organization_id,
+            policy_version=AUDIT_RETENTION_POLICY_VERSION,
             terminal_deleted_at=terminal_deleted_at,
             retention_deadline=retention_deadline,
             purged_count=purged_count,
+            already_purged_verified=require_already_purged,
         )

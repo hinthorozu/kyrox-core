@@ -3,7 +3,13 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, Header, Response, status
 
-from app.modules.audit.api.dependencies import get_record_organization_audit_event_use_case
+from app.modules.audit.api.dependencies import (
+    get_minimize_terminal_organization_audit_use_case,
+    get_record_organization_audit_event_use_case,
+)
+from app.modules.audit.application.minimize_terminal_organization_audit import (
+    MinimizeTerminalOrganizationAuditUseCase,
+)
 from app.modules.audit.application.record_organization_audit_event import (
     RecordOrganizationAuditEventCommand,
     RecordOrganizationAuditEventUseCase,
@@ -56,8 +62,8 @@ from app.modules.identity.application.organization.list_organizations import Lis
 from app.modules.identity.application.organization.reactivate_organization import ReactivateOrganizationUseCase
 from app.modules.identity.application.organization.suspend_organization import SuspendOrganizationUseCase
 from app.modules.identity.application.organization.update_organization import UpdateOrganizationUseCase
-from app.modules.identity.domain.authentication.value_objects.security.access_token import AccessTokenClaims
 from app.modules.identity.domain.authentication.value_objects.identity.user_id import UserId
+from app.modules.identity.domain.authentication.value_objects.security.access_token import AccessTokenClaims
 from app.modules.identity.domain.authorization.ports.platform_user_reader import PlatformUserReader
 from app.modules.identity.domain.organization.exceptions import OrganizationError
 from app.modules.identity.domain.organization.value_objects.identity.organization_id import OrganizationId
@@ -212,6 +218,9 @@ def delete_organization(
     audit_use_case: RecordOrganizationAuditEventUseCase = Depends(
         get_record_organization_audit_event_use_case
     ),
+    minimize_audit_use_case: MinimizeTerminalOrganizationAuditUseCase = Depends(
+        get_minimize_terminal_organization_audit_use_case
+    ),
 ) -> Response:
     assert_organization_scope(organization_id, context)
     try:
@@ -227,6 +236,19 @@ def delete_organization(
             claims=claims,
             action="identity.organization.deleted",
             new_values={"deleted": True},
+            audit_use_case=audit_use_case,
+        )
+        minimization = minimize_audit_use_case.execute(organization_id)
+        _record_lifecycle_audit(
+            organization_id=organization_id,
+            context=context,
+            claims=claims,
+            action="identity.organization.audit_retention_minimized",
+            new_values={
+                "policy_version": minimization.policy_version,
+                "deleted_non_retention_rows": minimization.counts.deleted_non_retention_rows,
+                "sanitized_retention_rows": minimization.counts.sanitized_retention_rows,
+            },
             audit_use_case=audit_use_case,
         )
     except OrganizationError as exc:
