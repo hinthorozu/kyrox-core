@@ -2,9 +2,11 @@ from dataclasses import dataclass
 
 
 AUDIT_RETENTION_POLICY_VERSION = "ol09-d.v1"
+CORE_LIFECYCLE_ACTION_PREFIX = "identity.organization."
+FAIR_CLOSURE_ACTION_PREFIX = "fair_crm.organization_closure."
 RETAINED_AUDIT_ACTION_PREFIXES = (
-    "identity.organization.",
-    "fair_crm.organization_closure.",
+    CORE_LIFECYCLE_ACTION_PREFIX,
+    FAIR_CLOSURE_ACTION_PREFIX,
 )
 
 
@@ -17,3 +19,7 @@ class AuditRetentionMinimizationCounts:
 def is_terminal_retention_action(action: str) -> bool:
     normalized = action.strip()
     return any(normalized.startswith(prefix) for prefix in RETAINED_AUDIT_ACTION_PREFIXES)
+
+
+def is_reserved_core_lifecycle_action(action: str) -> bool:
+    return action.strip().startswith(CORE_LIFECYCLE_ACTION_PREFIX)

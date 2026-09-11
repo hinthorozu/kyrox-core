@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session as DbSession
 
 from app.modules.audit.domain.entities import AuditLog
 from app.modules.audit.domain.retention_policy import (
+    FAIR_CLOSURE_ACTION_PREFIX,
     RETAINED_AUDIT_ACTION_PREFIXES,
     AuditRetentionMinimizationCounts,
 )
@@ -55,7 +56,7 @@ class SqlAlchemyAuditLogRepository:
             update(AuditLogModel)
             .where(
                 AuditLogModel.organization_id == organization_id,
-                retained_clause,
+                AuditLogModel.action.startswith(FAIR_CLOSURE_ACTION_PREFIX),
             )
             .values(
                 old_values=None,

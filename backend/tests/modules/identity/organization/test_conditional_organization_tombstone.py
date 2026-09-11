@@ -118,6 +118,11 @@ def test_conditional_tombstone_accepts_exact_current_suspension_episode(
         for row in retained
     )
 
+    deleted_rows = [row for row in retained if row.action == "identity.organization.deleted"]
+    assert len(deleted_rows) == 1
+    assert deleted_rows[0].new_values == {"deleted": True}
+    assert deleted_rows[0].event_metadata == {"authority": "system"}
+
     minimization_rows = [
         row for row in retained if row.action == "identity.organization.audit_retention_minimized"
     ]
@@ -129,13 +134,12 @@ def test_conditional_tombstone_accepts_exact_current_suspension_episode(
     assert minimization.event_metadata == {"authority": "system"}
 
     for row in retained:
-        if row is minimization:
-            continue
-        assert row.old_values is None
-        assert row.new_values is None
-        assert row.event_metadata is None
         assert row.ip_address is None
         assert row.user_agent is None
+        if row.action.startswith("fair_crm.organization_closure."):
+            assert row.old_values is None
+            assert row.new_values is None
+            assert row.event_metadata is None
 
 
 def test_conditional_tombstone_rejects_active_organization_without_mutation(

@@ -37,7 +37,10 @@ from app.modules.audit.domain.exceptions import (
     InvalidAuditEventError,
 )
 from app.modules.audit.domain.query_exceptions import InvalidAuditQueryError
-from app.modules.audit.domain.retention_policy import is_terminal_retention_action
+from app.modules.audit.domain.retention_policy import (
+    is_reserved_core_lifecycle_action,
+    is_terminal_retention_action,
+)
 from app.modules.identity.api.authorization.context import (
     AuthenticatedOrganizationContext,
     AuthorizationContext,
@@ -91,7 +94,7 @@ def _terminal_safe_body(
             detail="Deleted organizations accept only minimal retained control audit events",
         )
 
-    if action.startswith("identity.organization."):
+    if is_reserved_core_lifecycle_action(action):
         resource_type = "organization"
         resource_id = str(organization_id)
     else:
@@ -169,6 +172,11 @@ def record_organization_audit_event(
     organization = organization_repository.get_by_id_including_deleted(OrganizationId(organization_id))
     if organization is not None and organization.is_deleted():
         body = _terminal_safe_body(organization_id, body)
+    elif is_reserved_core_lifecycle_action(body.action):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Core lifecycle audit action namespace is reserved",
+        )
 
     try:
         audit_log = use_case.execute(
