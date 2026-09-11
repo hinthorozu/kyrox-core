@@ -53,3 +53,10 @@ class RecordAuditEventRequest(BaseModel):
     metadata: dict | None = None
     ip_address: str | None = Field(default=None, max_length=45)
     user_agent: str | None = Field(default=None, max_length=512)
+
+
+class PurgeRetainedOrganizationAuditResponse(BaseModel):
+    organization_id: UUID
+    terminal_deleted_at: datetime
+    retention_deadline: datetime
+    purged_count: int

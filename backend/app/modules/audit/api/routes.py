@@ -2,10 +2,11 @@ from datetime import datetime
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from app.modules.audit.api.dependencies import (
     get_list_organization_audit_logs_use_case,
+    get_purge_retained_organization_audit_use_case,
     get_record_organization_audit_event_use_case,
 )
 from app.modules.audit.api.error_mapping import map_audit_query_error, map_audit_record_error
@@ -20,13 +21,21 @@ from app.modules.audit.api.schemas import (
     AuditLogListResponse,
     AuditLogResponse,
     ErrorResponse,
+    PurgeRetainedOrganizationAuditResponse,
     RecordAuditEventRequest,
 )
 from app.modules.audit.application.list_organization_audit_logs import ListOrganizationAuditLogsUseCase
+from app.modules.audit.application.purge_retained_organization_audit import (
+    PurgeRetainedOrganizationAuditUseCase,
+)
 from app.modules.audit.application.record_organization_audit_event import (
     RecordOrganizationAuditEventUseCase,
 )
-from app.modules.audit.domain.exceptions import InvalidAuditEventError
+from app.modules.audit.domain.exceptions import (
+    AuditRetentionOrganizationNotFoundError,
+    AuditRetentionPreconditionError,
+    InvalidAuditEventError,
+)
 from app.modules.audit.domain.query_exceptions import InvalidAuditQueryError
 from app.modules.identity.api.authorization.context import (
     AuthenticatedOrganizationContext,
@@ -34,6 +43,9 @@ from app.modules.identity.api.authorization.context import (
 )
 from app.modules.identity.api.authorization.guards import require_organization_access, require_permission
 from app.modules.identity.api.authorization.scope import assert_organization_scope
+from app.modules.identity.api.organization.product_lifecycle_routes import (
+    require_product_lifecycle_credential,
+)
 
 router = APIRouter(tags=["audit"])
 
@@ -114,3 +126,34 @@ def record_organization_audit_event(
         raise map_audit_record_error(exc) from exc
 
     return audit_log_to_response(audit_log)
+
+
+@router.post(
+    "/organizations/{organization_id}/retained-audit-evidence/purge",
+    response_model=PurgeRetainedOrganizationAuditResponse,
+    dependencies=[Depends(require_product_lifecycle_credential)],
+    responses={
+        401: {"model": ErrorResponse},
+        404: {"model": ErrorResponse},
+        409: {"model": ErrorResponse},
+    },
+)
+def purge_retained_organization_audit_evidence(
+    organization_id: UUID,
+    use_case: PurgeRetainedOrganizationAuditUseCase = Depends(
+        get_purge_retained_organization_audit_use_case
+    ),
+) -> PurgeRetainedOrganizationAuditResponse:
+    try:
+        result = use_case.execute(organization_id)
+    except AuditRetentionOrganizationNotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except AuditRetentionPreconditionError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+
+    return PurgeRetainedOrganizationAuditResponse(
+        organization_id=result.organization_id,
+        terminal_deleted_at=result.terminal_deleted_at,
+        retention_deadline=result.retention_deadline,
+        purged_count=result.purged_count,
+    )
