@@ -57,6 +57,8 @@ class RecordAuditEventRequest(BaseModel):
 
 class PurgeRetainedOrganizationAuditResponse(BaseModel):
     organization_id: UUID
+    policy_version: str
     terminal_deleted_at: datetime
     retention_deadline: datetime
     purged_count: int
+    already_purged_verified: bool
