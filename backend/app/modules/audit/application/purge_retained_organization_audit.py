@@ -16,6 +16,18 @@ from app.modules.identity.domain.organization.value_objects.identity.organizatio
 AUDIT_RETENTION_MONTHS = 12
 
 
+def as_utc(value: datetime) -> datetime:
+    """Canonicalize persistence timestamps as UTC.
+
+    Core stores organization tombstones as UTC. SQLite and some drivers return
+    naive datetimes; ``datetime.astimezone(UTC)`` on a naive value uses the
+    process local zone and shifts the instant. Treat naive values as UTC.
+    """
+    if value.tzinfo is None or value.utcoffset() is None:
+        return value.replace(tzinfo=UTC)
+    return value.astimezone(UTC)
+
+
 @dataclass(frozen=True, slots=True)
 class PurgeRetainedOrganizationAuditResult:
     organization_id: UUID
@@ -74,15 +86,13 @@ class PurgeRetainedOrganizationAuditUseCase:
                 "Audit retention purge requires an authoritative terminal organization tombstone"
             )
 
-        terminal_deleted_at = organization.deleted_at.astimezone(UTC)
+        terminal_deleted_at = as_utc(organization.deleted_at)
         retention_deadline = add_calendar_months(
             terminal_deleted_at,
             AUDIT_RETENTION_MONTHS,
         )
-        now = self._clock.now()
-        if now.tzinfo is None or now.utcoffset() is None:
-            raise ValueError("Clock must return a timezone-aware timestamp")
-        if now.astimezone(UTC) < retention_deadline:
+        now = as_utc(self._clock.now())
+        if now < retention_deadline:
             raise AuditRetentionPreconditionError(
                 "Audit retention deadline has not been reached"
             )

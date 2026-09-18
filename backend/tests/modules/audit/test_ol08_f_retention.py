@@ -10,7 +10,10 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.modules.audit.api.routes import _terminal_safe_body
 from app.modules.audit.api.schemas import RecordAuditEventRequest
-from app.modules.audit.application.purge_retained_organization_audit import add_calendar_months
+from app.modules.audit.application.purge_retained_organization_audit import (
+    add_calendar_months,
+    as_utc,
+)
 from app.modules.audit.domain.retention_policy import AUDIT_RETENTION_POLICY_VERSION
 from app.modules.audit.infrastructure.persistence.models import AuditLogModel
 from app.modules.identity.api.authentication.dependencies import get_clock
@@ -95,6 +98,16 @@ def test_calendar_retention_maps_leap_day_to_last_valid_day() -> None:
         30,
         tzinfo=UTC,
     )
+
+
+def test_naive_tombstone_is_interpreted_as_utc_not_process_local_time() -> None:
+    naive = datetime(2025, 6, 15, 12, 30, 45)
+    aware = datetime(2025, 6, 15, 12, 30, 45, tzinfo=UTC)
+    assert as_utc(naive) == aware
+    assert as_utc(aware) == aware
+    deadline = add_calendar_months(as_utc(naive), 12)
+    assert deadline == datetime(2026, 6, 15, 12, 30, 45, tzinfo=UTC)
+    assert as_utc(datetime(2026, 6, 15, 12, 30, 44, 999999, tzinfo=UTC)) < deadline
 
 
 def test_retention_purge_requires_product_lifecycle_credential(
