@@ -5,6 +5,9 @@ from app.modules.identity.application.authentication.organization_lifecycle impo
     organization_allows_authentication,
 )
 from app.modules.identity.application.authentication.results import AuthTokenPairResult
+from app.modules.identity.application.authentication.revoke_all_user_sessions import (
+    RevokeAllUserSessionsUseCase,
+)
 from app.modules.identity.application.authentication.token_pair_issuer import TokenPairIssuer
 from app.modules.identity.domain.authentication.entities.session import Session
 from app.modules.identity.domain.authentication.exceptions import InvalidCredentialsError
@@ -27,6 +30,7 @@ class LoginUseCase:
         token_pair_issuer: TokenPairIssuer,
         clock: Clock,
         id_generator: IdGenerator,
+        revoke_all_user_sessions: RevokeAllUserSessionsUseCase,
         organization_repository: OrganizationRepository | None = None,
     ) -> None:
         self._user_repository = user_repository
@@ -35,6 +39,7 @@ class LoginUseCase:
         self._token_pair_issuer = token_pair_issuer
         self._clock = clock
         self._id_generator = id_generator
+        self._revoke_all_user_sessions = revoke_all_user_sessions
         self._organization_repository = organization_repository
 
     def execute(self, command: LoginCommand) -> AuthTokenPairResult:
@@ -61,6 +66,8 @@ class LoginUseCase:
             user.password_hash = self._password_hasher.hash(command.password)
             user.updated_at = self._clock.now()
             user = self._user_repository.update(user)
+
+        self._revoke_all_user_sessions.execute(user.id)
 
         now = self._clock.now()
         client = parse_client_context(command.client)

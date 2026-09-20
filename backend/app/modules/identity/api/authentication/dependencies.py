@@ -364,6 +364,7 @@ def get_token_pair_issuer(
 def get_login_use_case(
     user_repository: UserRepository = Depends(get_user_repository),
     session_repository: SessionRepository = Depends(get_session_repository),
+    refresh_token_repository: RefreshTokenRepository = Depends(get_refresh_token_repository),
     password_hasher: PasswordHasher = Depends(get_password_hasher),
     token_pair_issuer: TokenPairIssuer = Depends(get_token_pair_issuer),
     clock: Clock = Depends(get_clock),
@@ -376,6 +377,11 @@ def get_login_use_case(
         token_pair_issuer=token_pair_issuer,
         clock=clock,
         id_generator=id_generator,
+        revoke_all_user_sessions=RevokeAllUserSessionsUseCase(
+            session_repository=session_repository,
+            refresh_token_repository=refresh_token_repository,
+            clock=clock,
+        ),
     )
 
 
