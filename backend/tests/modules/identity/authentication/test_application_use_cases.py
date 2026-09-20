@@ -15,6 +15,9 @@ from app.modules.identity.application.authentication.login import LoginUseCase
 from app.modules.identity.application.authentication.logout import LogoutUseCase
 from app.modules.identity.application.authentication.policy import TokenPolicy
 from app.modules.identity.application.authentication.refresh_session import RefreshSessionUseCase
+from app.modules.identity.application.authentication.revoke_all_user_sessions import (
+    RevokeAllUserSessionsUseCase,
+)
 from app.modules.identity.application.authentication.token_pair_issuer import TokenPairIssuer
 from app.modules.identity.domain.authentication.entities.refresh_token import RefreshToken
 from app.modules.identity.domain.authentication.entities.session import Session
@@ -148,9 +151,23 @@ class InMemorySessionRepository:
     def get_by_id(self, session_id: SessionId) -> Session | None:
         return self._sessions.get(session_id.value)
 
+    def get_active_by_user_id(self, user_id: UserId) -> list[Session]:
+        return [
+            session
+            for session in self._sessions.values()
+            if session.user_id.value == user_id.value and session.is_active
+        ]
+
 
 class InMemoryRefreshTokenRepository:
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        *,
+        session_repository: InMemorySessionRepository,
+        clock: Clock,
+    ) -> None:
+        self._session_repository = session_repository
+        self._clock = clock
         self._tokens_by_hash: dict[str, RefreshToken] = {}
         self._tokens_by_id: dict[uuid.UUID, RefreshToken] = {}
 
@@ -180,6 +197,19 @@ class InMemoryRefreshTokenRepository:
             if token.session_id.value == session_id.value and token.is_usable(datetime.now(tz=UTC)):
                 return token
         return None
+
+    def get_active_by_user_id(self, user_id: UserId) -> list[RefreshToken]:
+        now = self._clock.now()
+        active: list[RefreshToken] = []
+        for token in self._tokens_by_id.values():
+            session = self._session_repository.get_by_id(token.session_id)
+            if (
+                session is not None
+                and session.user_id.value == user_id.value
+                and token.is_usable(now)
+            ):
+                active.append(token)
+        return active
 
 
 def _build_user(status: UserStatus = UserStatus.ACTIVE) -> User:
@@ -212,7 +242,10 @@ def _build_use_cases(
     id_generator = SequenceIdGenerator(ids)
     user_repository = InMemoryUserRepository(users or [_build_user()])
     session_repository = InMemorySessionRepository()
-    refresh_token_repository = InMemoryRefreshTokenRepository()
+    refresh_token_repository = InMemoryRefreshTokenRepository(
+        session_repository=session_repository,
+        clock=clock,
+    )
     refresh_token_service = FakeRefreshTokenService()
     token_policy = TokenPolicy(access_token_expire_seconds=900, refresh_token_expire_days=30)
     token_pair_issuer = TokenPairIssuer(
@@ -230,6 +263,11 @@ def _build_use_cases(
         token_pair_issuer=token_pair_issuer,
         clock=clock,
         id_generator=id_generator,
+        revoke_all_user_sessions=RevokeAllUserSessionsUseCase(
+            session_repository=session_repository,
+            refresh_token_repository=refresh_token_repository,
+            clock=clock,
+        ),
     )
     refresh_use_case = RefreshSessionUseCase(
         user_repository=user_repository,
@@ -263,6 +301,50 @@ def test_login_rejects_invalid_password() -> None:
 
     with pytest.raises(InvalidCredentialsError):
         login_use_case.execute(LoginCommand(email="user@example.com", password="wrong"))
+
+
+def test_successful_login_revokes_previous_user_sessions() -> None:
+    login_use_case, refresh_use_case, _, refresh_token_repository, _ = _build_use_cases(
+        id_values=[uuid.uuid4() for _ in range(16)],
+    )
+    first = login_use_case.execute(LoginCommand(email="user@example.com", password="secret"))
+    second = login_use_case.execute(LoginCommand(email="user@example.com", password="secret"))
+
+    stored_first = refresh_token_repository.get_by_token_hash(
+        TokenHash(f"hash:{first.refresh_token.value}")
+    )
+    stored_second = refresh_token_repository.get_by_token_hash(
+        TokenHash(f"hash:{second.refresh_token.value}")
+    )
+    assert stored_first is not None
+    assert stored_first.is_revoked() is True
+    assert stored_first.revoked_reason is RefreshTokenRevokeReason.SESSION_REVOKED
+    assert stored_second is not None
+    assert stored_second.is_usable(datetime(2026, 7, 1, 12, 0, tzinfo=UTC)) is True
+    assert second.refresh_token.value != first.refresh_token.value
+
+    with pytest.raises(RevokedRefreshTokenError):
+        refresh_use_case.execute(RefreshSessionCommand(refresh_token=first.refresh_token))
+
+    rotated = refresh_use_case.execute(RefreshSessionCommand(refresh_token=second.refresh_token))
+    assert rotated.refresh_token.value != second.refresh_token.value
+
+
+def test_failed_login_does_not_revoke_existing_session() -> None:
+    login_use_case, refresh_use_case, _, refresh_token_repository, _ = _build_use_cases()
+    first = login_use_case.execute(LoginCommand(email="user@example.com", password="secret"))
+
+    with pytest.raises(InvalidCredentialsError):
+        login_use_case.execute(LoginCommand(email="user@example.com", password="wrong"))
+
+    stored = refresh_token_repository.get_by_token_hash(
+        TokenHash(f"hash:{first.refresh_token.value}")
+    )
+    assert stored is not None
+    assert stored.is_revoked() is False
+
+    rotated = refresh_use_case.execute(RefreshSessionCommand(refresh_token=first.refresh_token))
+    assert rotated.refresh_token.value != first.refresh_token.value
 
 
 def test_login_rejects_inactive_user() -> None:

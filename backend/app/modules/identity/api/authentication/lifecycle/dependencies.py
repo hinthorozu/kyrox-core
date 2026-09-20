@@ -15,6 +15,9 @@ from app.modules.identity.api.authentication.dependencies import (
 from app.modules.identity.application.authentication.id_generator import IdGenerator
 from app.modules.identity.application.authentication.login import LoginUseCase
 from app.modules.identity.application.authentication.refresh_session import RefreshSessionUseCase
+from app.modules.identity.application.authentication.revoke_all_user_sessions import (
+    RevokeAllUserSessionsUseCase,
+)
 from app.modules.identity.application.authentication.token_pair_issuer import TokenPairIssuer
 from app.modules.identity.domain.authentication.ports.clock import Clock
 from app.modules.identity.domain.authentication.ports.password_hasher import PasswordHasher
@@ -33,6 +36,7 @@ def get_lifecycle_aware_login_use_case(
     db: DbSession = Depends(get_db),
     user_repository: UserRepository = Depends(get_user_repository),
     session_repository: SessionRepository = Depends(get_session_repository),
+    refresh_token_repository: RefreshTokenRepository = Depends(get_refresh_token_repository),
     password_hasher: PasswordHasher = Depends(get_password_hasher),
     token_pair_issuer: TokenPairIssuer = Depends(get_token_pair_issuer),
     clock: Clock = Depends(get_clock),
@@ -45,6 +49,11 @@ def get_lifecycle_aware_login_use_case(
         token_pair_issuer=token_pair_issuer,
         clock=clock,
         id_generator=id_generator,
+        revoke_all_user_sessions=RevokeAllUserSessionsUseCase(
+            session_repository=session_repository,
+            refresh_token_repository=refresh_token_repository,
+            clock=clock,
+        ),
         organization_repository=SqlAlchemyOrganizationRepository(db, clock),
     )
 

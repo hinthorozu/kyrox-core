@@ -141,3 +141,73 @@ def test_auth_logout_returns_204(client: TestClient, db_session: Session) -> Non
         json={"refresh_token": refresh_token},
     )
     assert refresh_response.status_code == 401
+
+
+def test_auth_login_replaces_existing_session(client: TestClient, db_session: Session) -> None:
+    _seed_active_user(db_session, "user@example.com", "password123")
+    other = _seed_active_user(db_session, "other@example.com", "password123")
+    db_session.commit()
+
+    first = client.post(
+        "/api/v1/auth/login",
+        json={"email": "user@example.com", "password": "password123"},
+    )
+    other_login = client.post(
+        "/api/v1/auth/login",
+        json={"email": other.email.value, "password": "password123"},
+    )
+    assert first.status_code == 200
+    assert other_login.status_code == 200
+    first_access = first.json()["access_token"]
+    first_refresh = first.json()["refresh_token"]
+    other_refresh = other_login.json()["refresh_token"]
+
+    failed = client.post(
+        "/api/v1/auth/login",
+        json={"email": "user@example.com", "password": "wrong"},
+    )
+    assert failed.status_code == 401
+    still_valid = client.post(
+        "/api/v1/auth/refresh",
+        json={"refresh_token": first_refresh},
+    )
+    assert still_valid.status_code == 200
+    first_refresh = still_valid.json()["refresh_token"]
+    first_access = still_valid.json()["access_token"]
+
+    second = client.post(
+        "/api/v1/auth/login",
+        json={"email": "user@example.com", "password": "password123"},
+    )
+    assert second.status_code == 200
+    second_refresh = second.json()["refresh_token"]
+    second_access = second.json()["access_token"]
+
+    stale_refresh = client.post(
+        "/api/v1/auth/refresh",
+        json={"refresh_token": first_refresh},
+    )
+    assert stale_refresh.status_code == 401
+
+    stale_access = client.post(
+        "/api/v1/auth/password/change",
+        headers={"Authorization": f"Bearer {first_access}"},
+        json={
+            "current_password": "password123",
+            "new_password": "replacement-password-123",
+        },
+    )
+    assert stale_access.status_code == 401
+
+    live_refresh = client.post(
+        "/api/v1/auth/refresh",
+        json={"refresh_token": second_refresh},
+    )
+    assert live_refresh.status_code == 200
+
+    other_still_valid = client.post(
+        "/api/v1/auth/refresh",
+        json={"refresh_token": other_refresh},
+    )
+    assert other_still_valid.status_code == 200
+    assert second_access != first_access
