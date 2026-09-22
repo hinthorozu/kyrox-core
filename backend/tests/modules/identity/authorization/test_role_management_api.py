@@ -104,9 +104,26 @@ def test_super_admin_template_derive_sync_and_permission_lock(
     )
     assert locked.status_code == 200
     assert locked.json()["affected_roles"] == 2
+    # Lock suspends use but keeps role grants so unlock restores access.
+    assert db_session.scalar(select(func.count(RolePermissionModel.role_id)).where(
+        RolePermissionModel.permission_id == permission_id
+    )) == 2
+    unlocked = client.post(
+        f"/api/v1/permissions/{permission_id}/lifecycle",
+        json={"state": "active", "reason": "Test unlock"},
+    )
+    assert unlocked.status_code == 200
+    assert db_session.scalar(select(func.count(RolePermissionModel.role_id)).where(
+        RolePermissionModel.permission_id == permission_id
+    )) == 2
+    inactivated = client.post(
+        f"/api/v1/permissions/{permission_id}/lifecycle",
+        json={"state": "inactive", "reason": "Test deactivate"},
+    )
+    assert inactivated.status_code == 200
     assert db_session.scalar(select(func.count(RolePermissionModel.role_id)).where(
         RolePermissionModel.permission_id == permission_id
     )) == 0
     assert db_session.scalar(select(func.count(AuditLogModel.id)).where(
         AuditLogModel.action == "permission.lifecycle.update"
-    )) == 1
+    )) == 3
