@@ -110,9 +110,42 @@ def _validated_permissions(db: Session, permission_ids: list[UUID], *, allow_res
     return permissions
 
 
+def _permissions_for_propagation(
+    db: Session, permission_ids: list[UUID], *, allow_restricted: bool
+) -> list[PermissionModel]:
+    """Propagate active grants plus locked grants kept for unlock restore. Drop inactive."""
+    unique_ids = set(permission_ids)
+    if not unique_ids:
+        return []
+    permissions = list(db.scalars(select(PermissionModel).where(PermissionModel.id.in_(unique_ids))).all())
+    if len(permissions) != len(unique_ids):
+        raise AppException("One or more permissions do not exist", status_code=status.HTTP_400_BAD_REQUEST)
+    active_ids = [item.id for item in permissions if item.lifecycle_state == "active"]
+    locked = [item for item in permissions if item.lifecycle_state == "locked"]
+    if any(item.permission_scope != "organization" for item in locked):
+        raise AppException("System permissions cannot be assigned to organization roles", status_code=status.HTTP_403_FORBIDDEN)
+    if not allow_restricted and any(not item.is_assignable for item in locked):
+        raise AppException("A platform-managed permission cannot be assigned", status_code=status.HTTP_403_FORBIDDEN)
+    active = _validated_permissions(db, active_ids, allow_restricted=allow_restricted) if active_ids else []
+    return active + locked
+
+
 def _replace_permissions(db: Session, role: RoleModel, permissions: list[PermissionModel], *, customized: bool) -> None:
+    # Locked grants stay on the role so unlock restores access without re-assignment.
+    kept_locked = list(db.scalars(
+        select(PermissionModel)
+        .join(RolePermissionModel, RolePermissionModel.permission_id == PermissionModel.id)
+        .where(
+            RolePermissionModel.role_id == role.id,
+            PermissionModel.lifecycle_state == "locked",
+        )
+    ).all())
+    by_id = {item.id: item for item in permissions}
+    for locked in kept_locked:
+        by_id.setdefault(locked.id, locked)
+    merged = list(by_id.values())
     db.execute(delete(RolePermissionModel).where(RolePermissionModel.role_id == role.id))
-    for permission in permissions:
+    for permission in merged:
         db.add(RolePermissionModel(role_id=role.id, permission_id=permission.id))
     role.permissions_customized = customized
     role.updated_at = datetime.now(tz=UTC)
@@ -170,7 +203,7 @@ def derive_template(
         db.flush()
     except IntegrityError as exc:
         raise AppException("Role slug already exists in organization", status_code=status.HTTP_409_CONFLICT) from exc
-    permissions = _validated_permissions(db, _permission_ids(db, template.id), allow_restricted=True)
+    permissions = _permissions_for_propagation(db, _permission_ids(db, template.id), allow_restricted=True)
     _replace_permissions(db, role, permissions, customized=False)
     _audit(db, actor_id=claims.sub.value, action="role_template.derive", resource_type="role", resource_id=role.id, organization_id=payload.organization_id, new_values={"source_template_role_id": str(template.id), "permission_count": len(permissions)})
     return _role_response(db, role)
@@ -214,7 +247,7 @@ def sync_template(
     template = _get_role(db, role_id)
     if template.role_kind != "template":
         raise AppException("Role is not a template", status_code=status.HTTP_400_BAD_REQUEST)
-    permissions = _validated_permissions(db, _permission_ids(db, template.id), allow_restricted=True)
+    permissions = _permissions_for_propagation(db, _permission_ids(db, template.id), allow_restricted=True)
     targets = _sync_targets(db, template, payload)
     for role in targets:
         previous_count = len(_permission_ids(db, role.id))
@@ -338,8 +371,20 @@ def update_organization_role_permissions(
     _replace_permissions(db, role, permissions, customized=True)
     if role.source_template_role_id:
         template_ids = set(_permission_ids(db, role.source_template_role_id))
+        # Locked grants are hidden from editors but still on the role; do not treat as exclusions.
+        locked_kept_ids = {
+            item.id
+            for item in db.scalars(
+                select(PermissionModel)
+                .join(RolePermissionModel, RolePermissionModel.permission_id == PermissionModel.id)
+                .where(
+                    RolePermissionModel.role_id == role.id,
+                    PermissionModel.lifecycle_state == "locked",
+                )
+            ).all()
+        }
         db.execute(delete(RoleTemplateExclusionModel).where(RoleTemplateExclusionModel.role_id == role.id))
-        for permission_id in template_ids - set(payload.permission_ids):
+        for permission_id in template_ids - set(payload.permission_ids) - locked_kept_ids:
             db.add(RoleTemplateExclusionModel(role_id=role.id, permission_id=permission_id))
     db.flush()
     _audit(db, actor_id=context.user_id, action="role.permissions.update", resource_type="role", resource_id=role.id, organization_id=organization_id, old_values={"permission_ids": [str(item) for item in old_ids]}, new_values={"permission_ids": [str(item.id) for item in permissions]})
@@ -411,7 +456,8 @@ def update_permission_lifecycle(
     permission.lifecycle_reason = payload.reason
     permission.lifecycle_changed_at = datetime.now(tz=UTC)
     permission.lifecycle_changed_by = claims.sub.value
-    if payload.state != "active":
+    # Lock suspends authorization only (grants kept). Inactive strips role grants permanently.
+    if payload.state == "inactive":
         db.execute(delete(RolePermissionModel).where(RolePermissionModel.permission_id == permission.id))
     _audit(db, actor_id=claims.sub.value, action="permission.lifecycle.update", resource_type="permission", resource_id=permission.id, old_values={"state": old_state}, new_values={"state": payload.state, "reason": payload.reason})
     db.flush()
