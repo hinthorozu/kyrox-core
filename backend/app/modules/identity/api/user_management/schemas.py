@@ -42,6 +42,7 @@ class ManagedOrganizationResponse(BaseModel):
 
 class UserManagementContextResponse(BaseModel):
     is_super_admin: bool
+    organization_id: UUID | None = None
     organizations: list[ManagedOrganizationResponse]
 
 

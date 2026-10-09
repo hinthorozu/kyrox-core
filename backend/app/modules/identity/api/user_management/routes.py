@@ -256,8 +256,13 @@ def get_user_management_context(
     else:
         organizations = []
 
+    owned_organization_id = None
+    if user is not None and user.deleted_at is None:
+        owned_organization_id = user.organization_id
+
     return UserManagementContextResponse(
         is_super_admin=is_super_admin,
+        organization_id=owned_organization_id,
         organizations=[
             ManagedOrganizationResponse(id=item.id, name=item.name, slug=item.slug)
             for item in organizations
@@ -389,7 +394,7 @@ def create_user(
         password_hash=_hash_password(payload.password),
         status=payload.status.value,
         is_super_admin=payload.is_super_admin if actor_is_super else False,
-        organization_id=None if payload.is_super_admin else organization_id,
+        organization_id=organization_id,
         created_at=now,
         updated_at=now,
         deleted_at=None,
@@ -472,17 +477,8 @@ def update_user(
         user.is_super_admin = payload.is_super_admin
 
     if user.is_super_admin:
-        user.organization_id = None
-        now = _now()
-        for item in db.scalars(
-            select(UserRoleModel).where(
-                UserRoleModel.user_id == user_id,
-                UserRoleModel.status == "active",
-                UserRoleModel.revoked_at.is_(None),
-            )
-        ).all():
-            item.status = "revoked"
-            item.revoked_at = now
+        if user.organization_id is None:
+            user.organization_id = organization_id
     else:
         user.organization_id = organization_id
         if payload.role_id is not None:
