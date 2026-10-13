@@ -6,7 +6,7 @@ from app.modules.notifications.application.policy import NotificationPolicy
 from app.modules.notifications.application.ports.job_enqueue_port import JobEnqueuePort
 from app.modules.notifications.application.results import SendNotificationResult
 from app.modules.notifications.domain.entities import Notification
-from app.modules.notifications.domain.exceptions import DuplicateIdempotencyConflictError
+from app.modules.notifications.domain.exceptions import DuplicateIdempotencyConflictError, InvalidNotificationRequestError
 from app.modules.notifications.domain.ports import (
     NotificationRepository,
     NotificationSettingsReader,
@@ -14,6 +14,7 @@ from app.modules.notifications.domain.ports import (
 )
 from app.modules.notifications.domain.value_objects.failure_reason import FailureReason
 from app.modules.notifications.domain.value_objects.notification_status import NotificationStatus
+from app.modules.notifications.domain.value_objects.notification_channel import NotificationChannel
 
 
 class SendNotificationUseCase:
@@ -31,6 +32,8 @@ class SendNotificationUseCase:
 
     def execute(self, command: SendNotificationCommand) -> SendNotificationResult:
         channel = self._notification_policy.normalize_channel(command.channel)
+        if channel == NotificationChannel.IN_APP and command.organization_id is not None:
+            raise InvalidNotificationRequestError("In-app delivery currently requires system scope")
         recipient = self._notification_policy.normalize_recipient(command.recipient, channel)
         subject = self._notification_policy.normalize_subject(command.subject)
         body = self._notification_policy.normalize_body(command.body)
@@ -55,6 +58,8 @@ class SendNotificationUseCase:
                     existing_subject=existing.subject,
                     existing_body=existing.body,
                     existing_template_key=existing.template_key,
+                    variables=variables,
+                    existing_variables=existing.variables,
                 ):
                     raise DuplicateIdempotencyConflictError(
                         "Idempotency key already used with a different payload"
@@ -108,6 +113,13 @@ class SendNotificationUseCase:
             suppressed_at=None,
         )
         saved = self._notification_repository.save(pending)
+
+        if channel == NotificationChannel.IN_APP:
+            # Delivery is durable inbox persistence; no email worker or external provider.
+            saved.status = NotificationStatus.SENT
+            saved.sent_at = now
+            saved = self._notification_repository.save(saved)
+            return self._to_result(saved, idempotent_replay=False)
 
         try:
             job_id = self._job_enqueue_port.enqueue_notification_dispatch(

@@ -8,6 +8,8 @@ from app.modules.notifications.domain.value_objects.recipient import Recipient
 
 
 class NotificationRepository(Protocol):
+    def list_system_in_app(self, user_id: UUID, *, limit: int) -> list[Notification]: ...
+
     def get_by_id(self, notification_id: UUID) -> Notification | None: ...
 
     def find_by_idempotency(

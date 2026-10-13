@@ -42,3 +42,19 @@ class SendNotificationResponse(BaseModel):
 
 class ErrorResponse(BaseModel):
     detail: str
+
+
+class InAppNotificationResponse(BaseModel):
+    id: UUID
+    subject: str
+    body: str
+    variables: dict[str, Any] | None
+    created_at: datetime
+
+
+class SystemInAppNotificationRequest(BaseModel):
+    recipient: str = "super_admin"
+    subject: str
+    body: str
+    variables: dict[str, Any] | None = None
+    idempotency_key: str = Field(min_length=1, max_length=128)

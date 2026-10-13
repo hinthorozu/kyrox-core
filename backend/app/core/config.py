@@ -27,6 +27,8 @@ class Settings(BaseSettings):
     # query canonical organization lifecycle eligibility. Never reuse user JWTs
     # or provider credentials for this contract.
     CORE_PRODUCT_LIFECYCLE_TOKEN: str = "dev-insecure-product-lifecycle-token-change-me"
+    # Purpose-separated product worker -> platform in-app delivery credential.
+    CORE_PRODUCT_NOTIFICATION_TOKEN: str | None = None
 
     # OL09-B purpose-separated Core -> FAIR CRM suspension-security delivery.
     # No default secret is accepted: deployments must explicitly configure the

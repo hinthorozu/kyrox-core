@@ -1,4 +1,5 @@
 import re
+from uuid import UUID
 from typing import Any
 
 from app.modules.notifications.domain.exceptions import (
@@ -30,6 +31,11 @@ class NotificationPolicy:
         recipient = Recipient.create(raw)
         if channel == NotificationChannel.EMAIL and not _EMAIL_PATTERN.match(recipient.value):
             raise InvalidNotificationRequestError("Recipient must be a valid email address")
+        if channel == NotificationChannel.IN_APP and recipient.value != "super_admin":
+            try:
+                recipient = Recipient.create(str(UUID(recipient.value)))
+            except ValueError as exc:
+                raise InvalidNotificationRequestError("In-app recipient must be a user id or super_admin") from exc
         return recipient
 
     def normalize_subject(self, raw: str) -> str:
@@ -96,6 +102,8 @@ class NotificationPolicy:
         existing_subject: str,
         existing_body: str,
         existing_template_key: str | None,
+        variables: dict[str, Any] | None = None,
+        existing_variables: dict[str, Any] | None = None,
     ) -> bool:
         return (
             channel == existing_channel
@@ -103,4 +111,5 @@ class NotificationPolicy:
             and subject == existing_subject
             and body == existing_body
             and template_key == existing_template_key
+            and variables == existing_variables
         )

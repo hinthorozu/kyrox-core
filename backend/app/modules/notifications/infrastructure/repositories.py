@@ -16,6 +16,20 @@ class SqlAlchemyNotificationRepository:
     def __init__(self, session: DbSession) -> None:
         self._session = session
 
+    def list_system_in_app(self, user_id: UUID, *, limit: int) -> list[Notification]:
+        models = self._session.scalars(
+            select(PlatformNotificationModel)
+            .where(
+                PlatformNotificationModel.organization_id.is_(None),
+                PlatformNotificationModel.channel == "in_app",
+                PlatformNotificationModel.status == "sent",
+                PlatformNotificationModel.recipient.in_(("super_admin", str(user_id))),
+            )
+            .order_by(PlatformNotificationModel.created_at.desc(), PlatformNotificationModel.id.desc())
+            .limit(limit)
+        ).all()
+        return [notification_to_domain(model) for model in models]
+
     def get_by_id(self, notification_id: UUID) -> Notification | None:
         model = self._session.get(PlatformNotificationModel, notification_id)
         if model is None:
