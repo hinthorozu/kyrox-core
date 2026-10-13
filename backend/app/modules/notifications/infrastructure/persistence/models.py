@@ -14,7 +14,7 @@ from app.db.utils import generate_uuid
 class PlatformNotificationModel(Base):
     __tablename__ = "platform_notifications"
     __table_args__ = (
-        CheckConstraint("channel IN ('email')", name="ck_platform_notifications_channel"),
+        CheckConstraint("channel IN ('email', 'in_app')", name="ck_platform_notifications_channel"),
         CheckConstraint(
             "status IN ('pending', 'queued', 'sending', 'sent', 'failed', 'suppressed')",
             name="ck_platform_notifications_status",

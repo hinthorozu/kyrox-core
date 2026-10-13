@@ -1,16 +1,19 @@
 from uuid import UUID
 
-from fastapi import APIRouter, BackgroundTasks, Depends, status
+from fastapi import APIRouter, BackgroundTasks, Depends, Query, status
 from fastapi.responses import JSONResponse
 
 from app.modules.identity.api.authorization.context import AuthorizationContext
-from app.modules.identity.api.authorization.guards import require_permission
+from app.modules.identity.api.authorization.guards import require_permission, require_super_admin
+from app.modules.identity.domain.authentication.value_objects.security.access_token import AccessTokenClaims
 from app.modules.identity.api.authorization.scope import assert_organization_scope
 from app.modules.notifications.api.dependencies import (
     NotificationWorkerScheduler,
     get_get_notification_use_case,
     get_notification_worker_scheduler,
     get_send_notification_use_case,
+    get_list_system_in_app_notifications_use_case,
+    require_product_notification_credential,
 )
 from app.modules.notifications.api.error_mapping import map_notification_error
 from app.modules.notifications.api.mappers import (
@@ -27,10 +30,53 @@ from app.modules.notifications.api.schemas import (
 )
 from app.modules.notifications.application.get_notification import GetNotificationUseCase
 from app.modules.notifications.application.send_notification import SendNotificationUseCase
+from app.modules.notifications.application.list_in_app_notifications import ListSystemInAppNotificationsUseCase
+from app.modules.notifications.application.commands import SendNotificationCommand
+from app.modules.notifications.api.schemas import InAppNotificationResponse, SystemInAppNotificationRequest
 from app.modules.notifications.domain.exceptions import NotificationError
 from app.modules.notifications.domain.value_objects.notification_status import NotificationStatus
 
 router = APIRouter(tags=["notifications"])
+
+
+@router.post("/system/notifications/in-app", response_model=SendNotificationResponse)
+def send_system_in_app_notification(
+    body: SystemInAppNotificationRequest,
+    _: AccessTokenClaims = Depends(require_super_admin),
+    use_case: SendNotificationUseCase = Depends(get_send_notification_use_case),
+) -> SendNotificationResponse:
+    result = _handle_notification_errors(lambda: use_case.execute(SendNotificationCommand(
+        organization_id=None, channel="in_app", recipient=body.recipient,
+        subject=body.subject, body=body.body, variables=body.variables,
+        template_key=None, idempotency_key=body.idempotency_key,
+    )))
+    return send_result_to_response(result)
+
+
+@router.get("/system/notifications/in-app", response_model=list[InAppNotificationResponse])
+def list_system_in_app_notifications(
+    limit: int = Query(default=50, ge=1, le=100),
+    claims: AccessTokenClaims = Depends(require_super_admin),
+    use_case: ListSystemInAppNotificationsUseCase = Depends(get_list_system_in_app_notifications_use_case),
+) -> list[InAppNotificationResponse]:
+    return [InAppNotificationResponse(
+        id=item.id, subject=item.subject, body=item.body,
+        variables=item.variables, created_at=item.created_at,
+    ) for item in use_case.execute(claims.sub.value, limit=limit)]
+
+
+@router.post("/internal/notifications/in-app", response_model=SendNotificationResponse,
+             dependencies=[Depends(require_product_notification_credential)])
+def deliver_worker_in_app_notification(
+    body: SystemInAppNotificationRequest,
+    use_case: SendNotificationUseCase = Depends(get_send_notification_use_case),
+) -> SendNotificationResponse:
+    result = _handle_notification_errors(lambda: use_case.execute(SendNotificationCommand(
+        organization_id=None, channel="in_app", recipient=body.recipient,
+        subject=body.subject, body=body.body, variables=body.variables,
+        template_key=None, idempotency_key=body.idempotency_key,
+    )))
+    return send_result_to_response(result)
 
 
 def _handle_notification_errors(use_case_call):

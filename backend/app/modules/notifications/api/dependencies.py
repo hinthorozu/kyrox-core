@@ -1,6 +1,8 @@
 from dataclasses import dataclass
 
-from fastapi import BackgroundTasks, Depends, Request
+from fastapi import BackgroundTasks, Depends, Request, Header, HTTPException
+from secrets import compare_digest
+from app.core.config import settings
 from sqlalchemy.orm import Session as DbSession
 
 from app.db.session import get_db
@@ -10,6 +12,7 @@ from app.modules.notifications.application.dispatch_notification import Dispatch
 from app.modules.notifications.application.get_notification import GetNotificationUseCase
 from app.modules.notifications.application.policy import NotificationPolicy
 from app.modules.notifications.application.send_notification import SendNotificationUseCase
+from app.modules.notifications.application.list_in_app_notifications import ListSystemInAppNotificationsUseCase
 from app.modules.notifications.domain.ports import NotificationChannelRegistry, NotificationRepository
 from app.modules.notifications.domain.ports import NotificationSettingsReader
 from app.modules.notifications.application.ports.job_enqueue_port import JobEnqueuePort
@@ -63,6 +66,22 @@ def get_notification_repository(db: DbSession = Depends(get_db)) -> Notification
 
 def get_notification_policy() -> NotificationPolicy:
     return NotificationPolicy()
+
+
+def require_product_notification_credential(
+    token: str | None = Header(default=None, alias="X-Kyrox-Notification-Token"),
+) -> None:
+    configured = settings.CORE_PRODUCT_NOTIFICATION_TOKEN
+    if not configured or len(configured) < 32:
+        raise HTTPException(503, "Product notification credential is not configured")
+    if token is None or not compare_digest(token, configured):
+        raise HTTPException(401, "Invalid product notification credential")
+
+
+def get_list_system_in_app_notifications_use_case(
+    repository: NotificationRepository = Depends(get_notification_repository),
+) -> ListSystemInAppNotificationsUseCase:
+    return ListSystemInAppNotificationsUseCase(repository)
 
 
 def get_notification_settings_reader(db: DbSession = Depends(get_db)) -> NotificationSettingsReader:
